@@ -1,0 +1,66 @@
+Cyren_Indicators_CL
+| extend 
+    // Normalize field names
+    URL = tostring(url_s),
+    IP = tostring(ip_s),
+    FileHash = tostring(fileHash_s),
+    Domain = tostring(domain_s),
+    Protocol = tostring(protocol_s),
+    Port = toint(port_d),
+    Category = tostring(category_s),
+    RiskScore = toint(risk_d),
+    FirstSeen = todatetime(firstSeen_t),
+    LastSeen = todatetime(lastSeen_t),
+    Source = tostring(source_s),
+    DetectionMethods = tostring(detection_methods_s),
+    Action = tostring(action_s),
+    Type = tostring(type_s),
+    Identifier = tostring(identifier_s)
+| extend
+    // Determine primary IOC (indicator of compromise)
+    IOC = coalesce(URL, Domain, IP, FileHash),
+    // Determine IOC type
+    IOCType = case(
+        isnotempty(URL), "URL",
+        isnotempty(Domain), "Domain",
+        isnotempty(IP), "IP",
+        isnotempty(FileHash), "FileHash",
+        "Unknown"
+    ),
+    // Calculate age of indicator
+    IndicatorAgeDays = datetime_diff('day', now(), FirstSeen),
+    // Determine if indicator is recent (last 7 days)
+    IsRecent = (datetime_diff('day', now(), LastSeen) <= 7),
+    // Determine if indicator is active (last 48 hours)
+    IsActive = (datetime_diff('hour', now(), LastSeen) <= 48),
+    // Categorize risk level
+    RiskLevel = case(
+        RiskScore >= 80, "Critical",
+        RiskScore >= 60, "High",
+        RiskScore >= 40, "Medium",
+        RiskScore >= 20, "Low",
+        "Informational"
+    )
+| project 
+    TimeGenerated,
+    IOC,
+    IOCType,
+    URL,
+    IP,
+    Domain,
+    FileHash,
+    Protocol,
+    Port,
+    Category,
+    RiskScore,
+    RiskLevel,
+    FirstSeen,
+    LastSeen,
+    IndicatorAgeDays,
+    IsRecent,
+    IsActive,
+    DetectionMethods,
+    Action,
+    Type,
+    Identifier,
+    Source

@@ -1,0 +1,73 @@
+// Analytics Rule: Department Compromise Cluster
+// Detects when multiple users from the same department are compromised
+// Indicates potential targeted campaign or department-wide vulnerability
+// Severity: High
+// Tactics: Credential Access, Collection
+// Frequency: 6 hours
+// Query Period: 7 days
+
+let lookbackPeriod = 7d;
+let departmentThreshold = 3; // Alert if 3+ users in same department
+// Get recent compromised users
+let CompromisedUsers = parser_tacitred_findings()
+    | where TimeGenerated >= ago(lookbackPeriod)
+    | where IsRecent == true
+    | summarize 
+        CompromiseCount = count(),
+        FirstSeen = min(FirstSeen),
+        LastSeen = max(LastSeen),
+        FindingTypes = make_set(FindingType),
+        AvgConfidence = avg(Confidence)
+        by Email;
+// Get user department info from IdentityInfo
+let UserDepartments = IdentityInfo
+    | where TimeGenerated >= ago(1d)
+    | summarize arg_max(TimeGenerated, *) by AccountUPN
+    | where isnotempty(Department)
+    | project AccountUPN, Department, JobTitle, Manager;
+// Join compromised users with department info
+let CompromisedByDept = CompromisedUsers
+    | join kind=inner (UserDepartments) on $left.Email == $right.AccountUPN
+    | project Email, Department, JobTitle, Manager, CompromiseCount, FirstSeen, LastSeen, FindingTypes, AvgConfidence;
+// Aggregate by department
+CompromisedByDept
+| summarize 
+    AffectedUsers = make_set(Email),
+    AffectedUserCount = dcount(Email),
+    TotalCompromises = sum(CompromiseCount),
+    FirstCompromise = min(FirstSeen),
+    LatestCompromise = max(LastSeen),
+    JobTitles = make_set(JobTitle),
+    Managers = make_set(Manager),
+    FindingTypes = make_set(FindingTypes),
+    AvgConfidence = avg(AvgConfidence)
+    by Department
+| where AffectedUserCount >= departmentThreshold
+| extend
+    CompromiseWindow = datetime_diff('day', LatestCompromise, FirstCompromise),
+    Severity = case(
+        AffectedUserCount >= 10, "Critical",
+        AffectedUserCount >= 5, "High",
+        "Medium"
+    ),
+    ThreatDescription = strcat(
+        AffectedUserCount, " users in ", Department, " department compromised. ",
+        "Total compromises: ", TotalCompromises, ". ",
+        "Compromise window: ", CompromiseWindow, " days. ",
+        "This may indicate a targeted campaign or department-wide vulnerability."
+    )
+| project
+    Department,
+    Severity,
+    AffectedUserCount,
+    AffectedUsers,
+    TotalCompromises,
+    FirstCompromise,
+    LatestCompromise,
+    CompromiseWindow,
+    AvgConfidence,
+    JobTitles,
+    Managers,
+    FindingTypes,
+    ThreatDescription
+| order by AffectedUserCount desc, LatestCompromise desc

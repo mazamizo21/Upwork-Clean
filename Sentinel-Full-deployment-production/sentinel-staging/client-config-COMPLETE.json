@@ -1,0 +1,139 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Complete configuration for Sentinel Threat Intelligence Solution",
+    "version": "1.0.0",
+    "lastUpdated": "2025-11-07"
+  },
+  "parameters": {
+    "azure": {
+      "value": {
+        "subscriptionId": "774bee0e-b281-4f70-8e40-199e35b65117",
+        "resourceGroupName": "SentinelTestStixImport",
+        "workspaceName": "SentinelTestStixImportInstance",
+        "location": "eastus",
+        "tenantId": "a67bbe4c-49aa-49c4-ae48-223a8986af59"
+      }
+    },
+    "tacitRed": {
+      "value": {
+        "enabled": true,
+        "apiKey": "a2be534e-6231-4fb0-b8b8-15dbc96e83b7",
+        "apiBaseUrl": "https://api.tacitred.com/v1",
+        "pollingIntervalHours": 1,
+        "logicAppName": "logic-tacitred-findings",
+        "dcrName": "dcr-tacitred-findings",
+        "tableName": "TacitRed_Findings_CL",
+        "streamName": "Custom-TacitRed_Findings_CL"
+      }
+    },
+    "cyren": {
+      "value": {
+        "enabled": true,
+        "apiBaseUrl": "https://api-feeds.cyren.com/v1/feed/data",
+        "fetchCount": 100,
+        "ipReputation": {
+          "enabled": true,
+          "feedId": "ip_reputation",
+          "jwtToken": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJleHAiOjE5MzAzNDg3OTksImF1ZCI6ImlwX3JlcHV0YXRpb24iLCJzdWIiOiJOSjUxQlU4MDYwNTNZVjBJMEgxQSIsImp0aSI6IjY5MTA3Njg4LWQ4NTQtMTFlZi05NGY5LWJjMjQxMTNkZTQ4ZSIsImlzcyI6ImNsbSJ9.Aw0gyb5l3OQbizawiOCXaJVE8VKOIo5Mm5aRogTr_RgqZ8yklyjzS52NAz3KEh4OTcl1i6qIO3GtaeRhq4x6LUaqwMTiSMUIIm3xU-2b5Y4GeRhsE5tl8Y7fYblaNcPhEOnLfHi8UtX4Aa_VfmPTslZbFoqpTUcaCkOOTBbz7HYEI7YdgziTIbGk-0Jwt47iI_AsaSy-SA13Syuv82rvRM08tOuyNn9hQgyjo0YAmAUbeC5eMCpbkhmujuDwGOhnurVtjvM8fPPsVJJBLJSYNonurwZi-txYVypd3-tQA0nlRJOZuFXKzDjVZEpkG-ivzqyJIbvcCcTXyeADYQOpnQ",
+          "clientId": "NJ51BU806053YV0I0H1A",
+          "pollingIntervalHours": 6,
+          "logicAppName": "logicapp-cyren-ip-reputation",
+          "dcrName": "dcr-cyren-ip-reputation",
+          "tableName": "Cyren_IpReputation_CL",
+          "streamName": "Custom-Cyren_IpReputation_CL"
+        },
+        "malwareUrls": {
+          "enabled": true,
+          "feedId": "malware_urls",
+          "jwtToken": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJleHAiOjE3NzE3MTgzOTksImF1ZCI6Im1hbHdhcmVfdXJscyIsInN1YiI6IjUxWjBGRDQwWTFJN0FBMU9KUDBRIiwianRpIjoiZjFiNGNhMjYtZDg1My0xMWVmLTk0ZjktYmMyNDExM2RlNDhlIiwiaXNzIjoiY2xtIn0.dEh1vGCVAQSChRQsroM5AkC6YyjaG9yzr9lxmj-xWDslgbrTdzeoZPP83nJh05TS6IXHd_CDGlqcdgxQxip9y8kikVKrF12vnTwCMBu_cFG46OHwE8ilCCejBz_L9mr53ksO-bkhqZGrcxsJVxpoSBuaNua3mwUBcH1CoPHyO7XUjgHW4MZShxe0Lb5JHrEil03QElqP_O_GXvcl8CS8l_DUd5y-2J9A4RXrSlSOIe7PQden8w0y8q0wgfYOL0GaAwZvEXl91Rz41Yavm5aC5GKIBUNJzn_OZ5yk5G99FdAkhdT4N87R_j7054l_K-2XBsAAWKsQ89UWgQK7aj-72A",
+          "clientId": "51Z0FD40Y1I7AA1OJP0Q",
+          "pollingIntervalHours": 6,
+          "logicAppName": "logicapp-cyren-malware-urls",
+          "dcrName": "dcr-cyren-malware-urls",
+          "tableName": "Cyren_MalwareUrls_CL",
+          "streamName": "Custom-Cyren_MalwareUrls_CL"
+        }
+      }
+    },
+    "dataCollection": {
+      "value": {
+        "dceEnabled": true,
+        "dceName": "dce-sentinel-threatintel",
+        "rbacWaitSeconds": 120
+      }
+    },
+    "analytics": {
+      "value": {
+        "deployParsers": true,
+        "deployRules": true,
+        "parserNames": [
+          "parser-tacitred",
+          "parser-cyren"
+        ],
+        "ruleNames": [
+          "TacitRed_RepeatCompromise",
+          "TacitRed_HighRiskUser",
+          "TI_MalwareInfrastructure",
+          "TI_HighRiskIndicator",
+          "Advanced_MultistageAttack"
+        ]
+      }
+    },
+    "workbooks": {
+      "value": {
+        "deployWorkbooks": true,
+        "workbooks": [
+          {
+            "name": "Threat Intelligence Dashboard",
+            "bicepFile": "workbook-threat-intelligence-command-center.bicep",
+            "enabled": true
+          },
+          {
+            "name": "Executive Risk Dashboard",
+            "bicepFile": "workbook-executive-risk-dashboard.bicep",
+            "enabled": true
+          },
+          {
+            "name": "Threat Hunter Arsenal",
+            "bicepFile": "workbook-threat-hunters-arsenal.bicep",
+            "enabled": true
+          },
+          {
+            "name": "CISO Correlation",
+            "bicepFile": "workbook-ciso-correlation.bicep",
+            "enabled": false,
+            "note": "Disabled - bicep file does not exist"
+          }
+        ]
+      }
+    },
+    "ccf": {
+      "value": {
+        "enabled": false,
+        "deployTacitRedCCF": false,
+        "deployCyrenCCF": false,
+        "note": "CCF deployment disabled until authentication issues resolved. Use Logic Apps instead."
+      }
+    },
+    "deployment": {
+      "value": {
+        "enableAutomatedTesting": true,
+        "enableRBACWait": true,
+        "enableDataValidation": true,
+        "generateLogs": true,
+        "logsPath": "./logs"
+      }
+    },
+    "tags": {
+      "value": {
+        "Environment": "Production",
+        "Solution": "Sentinel-ThreatIntel",
+        "ManagedBy": "Automation",
+        "DeploymentMethod": "1-Click",
+        "Version": "1.0.0"
+      }
+    }
+  }
+}

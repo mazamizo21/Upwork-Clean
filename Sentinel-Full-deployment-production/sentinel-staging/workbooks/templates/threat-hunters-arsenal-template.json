@@ -1,0 +1,102 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# 🔍 Threat Hunter's Arsenal\n\n## Advanced Investigation & Proactive Hunting\n\n**Capabilities:**\n- Rapid Credential Reuse Detection\n- Persistent Infrastructure Identification\n- Attack Chain Reconstruction\n- MITRE ATT&CK Mapping\n- IOC Multi-Context Enrichment\n\n**Purpose:** Accelerate threat hunting with automated behavioral pattern detection"
+      },
+      "name": "header-text"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "time-param",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ],
+              "allowCustom": true
+            },
+            "label": "Time Range"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters-1"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// RAPID CREDENTIAL REUSE DETECTION\nTacitRed_Findings_CL\n| where TimeGenerated {TimeRange}\n| extend payload = parse_json(payload_s)\n| extend \n    Email = tostring(coalesce(payload.email, payload.username, \"unknown\")),\n    Domain = tostring(coalesce(payload.domain, payload.target_domain, \"unknown\")),\n    FirstSeen = coalesce(todatetime(payload.firstSeen), todatetime(payload.first_seen), TimeGenerated),\n    LastSeen = coalesce(todatetime(payload.lastSeen), todatetime(payload.last_seen), TimeGenerated)\n| summarize \n    FindingCount = count(),\n    Domains = make_set(Domain),\n    MinFirstSeen = min(FirstSeen),\n    MaxLastSeen = max(LastSeen)\n    by Email\n| extend TimeSpanHours = datetime_diff('hour', MaxLastSeen, MinFirstSeen)\n| extend UniqueDomains = array_length(Domains)\n| extend ReuseVelocity = iff(TimeSpanHours > 0, todouble(FindingCount) / todouble(TimeSpanHours), 0.0)\n| extend BehaviorScore = case(\n        FindingCount >= 5 and TimeSpanHours <= 24, 95,\n        FindingCount >= 3 and TimeSpanHours <= 72, 85,\n        FindingCount >= 2 and UniqueDomains >= 2, 75,\n        50\n    )\n| extend HuntingFlag = case(\n    BehaviorScore >= 75, \"🎯 High Risk\",\n    \"📊 Normal Activity\"\n)\n| project \n    HuntingFlag, \n    Email, \n    FindingCount, \n    UniqueDomains, \n    TimeSpanHours, \n    ReuseVelocity = round(ReuseVelocity, 3), \n    BehaviorScore,\n    AffectedDomains = strcat_array(Domains, \", \")\n| order by BehaviorScore desc\n| take 100",
+        "size": 0,
+        "title": "🎯 Rapid Credential Reuse Detection",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "query-credential-reuse"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// PERSISTENT MALWARE INFRASTRUCTURE\nCyren_MalwareUrls_CL\n| where TimeGenerated >= ago(30d)\n| extend payload = parse_json(payload_s)\n| extend \n    Domain = tostring(coalesce(payload.domain, extract(@\"://([^/]+)\", 1, tostring(payload.url)), \"unknown\")),\n    FirstSeen = coalesce(todatetime(payload.first_seen), todatetime(payload.firstSeen), TimeGenerated),\n    LastSeen = coalesce(todatetime(payload.last_seen), todatetime(payload.lastSeen), TimeGenerated),\n    Category = tostring(coalesce(payload.category, payload.type, \"unknown\")),\n    Risk = toint(coalesce(payload.risk, payload.score, 50))\n| summarize \n    DetectionCount = count(),\n    DetectionDays = dcount(bin(TimeGenerated, 1d)),\n    Categories = make_set(Category),\n    FirstDetection = min(FirstSeen),\n    LastDetection = max(LastSeen),\n    MaxRisk = max(Risk)\n    by Domain\n| extend LifespanDays = datetime_diff('day', LastDetection, FirstDetection)\n| extend IsCurrentlyActive = datetime_diff('hour', now(), LastDetection) <= 48\n| extend PersistenceScore = case(\n        DetectionDays >= 20 and IsCurrentlyActive, 100,\n        DetectionDays >= 14 and IsCurrentlyActive, 90,\n        DetectionDays >= 10 and IsCurrentlyActive, 80,\n        DetectionDays >= 7, 70,\n        60\n    )\n| extend HuntingFlag = case(\n    PersistenceScore >= 80 and IsCurrentlyActive, \"🎯 High Persistence\",\n    \"📊 Normal Activity\"\n)\n| project \n    HuntingFlag, \n    Domain, \n    DetectionCount, \n    DetectionDays, \n    LifespanDays,\n    PersistenceScore, \n    IsCurrentlyActive, \n    MaxRisk,\n    MalwareCategories = strcat_array(Categories, \", \")\n| order by PersistenceScore desc\n| take 100",
+        "size": 0,
+        "title": "🏗️ Persistent Malware Infrastructure",
+        "timeContext": {
+          "durationMs": 2592000000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "query-persistent-infrastructure"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// MITRE ATT&CK MAPPING\nlet CredentialAccessTechniques = TacitRed_Findings_CL\n| where TimeGenerated {TimeRange}\n| extend payload = parse_json(payload_s)\n| extend \n    FindingType = tostring(coalesce(payload.findingType, payload.type, payload.category, \"unknown\")),\n    Confidence = todouble(coalesce(payload.confidence, payload.score, 50))\n| extend \n    MitreTechnique = case(\n        FindingType contains \"credential\" or FindingType contains \"password\", \"T1078 - Valid Accounts\",\n        FindingType contains \"dump\", \"T1003 - OS Credential Dumping\",\n        \"T1552 - Unsecured Credentials\"\n    ),\n    MitreTactic = \"TA0006 - Credential Access\",\n    ThreatSource = \"TacitRed\"\n| summarize \n    Detections = count(),\n    AvgConfidence = round(avg(Confidence), 2)\n    by MitreTactic, MitreTechnique, ThreatSource;\nlet InitialAccessTechniques = Cyren_MalwareUrls_CL\n| where TimeGenerated {TimeRange}\n| extend payload = parse_json(payload_s)\n| extend \n    Category = tostring(coalesce(payload.category, payload.type, \"unknown\")),\n    Risk = toint(coalesce(payload.risk, payload.score, 50))\n| extend \n    MitreTechnique = case(\n        Category contains \"phish\", \"T1566 - Phishing\",\n        Category contains \"exploit\", \"T1190 - Exploit Public-Facing Application\",\n        \"T1566.002 - Phishing: Spearphishing Link\"\n    ),\n    MitreTactic = \"TA0001 - Initial Access\",\n    ThreatSource = \"Cyren\"\n| summarize \n    Detections = count(),\n    AvgRisk = round(avg(Risk), 2)\n    by MitreTactic, MitreTechnique, ThreatSource;\nunion CredentialAccessTechniques, InitialAccessTechniques\n| extend \n    TechniqueSeverity = case(\n        Detections >= 50, \"🔴 Critical\",\n        Detections >= 20, \"🟠 High\",\n        Detections >= 5, \"🟡 Medium\",\n        \"🟢 Low\"\n    )\n| project \n    MitreTactic,\n    MitreTechnique,\n    ThreatSource,\n    Detections,\n    TechniqueSeverity\n| order by Detections desc",
+        "size": 0,
+        "title": "🗺️ MITRE ATT&CK Technique Mapping",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "query-mitre-attack"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-ThreatHuntersArsenal",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

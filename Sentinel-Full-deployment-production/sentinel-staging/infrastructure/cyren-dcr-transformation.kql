@@ -1,0 +1,78 @@
+// DCR Transformation for Cyren Indicators
+// Maps Cyren API JSON response to Cyren_Indicators_CL table schema
+// Reference: Based on malware_url_snippet and iprep_snippet customer samples
+
+source
+// Extract basic indicator fields
+| extend url_s = tostring(url)
+| extend type_s = tostring(['type'])
+| extend identifier_s = tostring(identifier)
+
+// Parse detection information
+| extend category_s = tostring(detection.category[0])
+| extend detection_ts_t = todatetime(detection.detection_ts)
+| extend risk_d = toint(detection.risk)
+
+// Parse metadata
+| extend protocol_s = tostring(meta.protocol)
+| extend port_d = toint(meta.port)
+| extend object_type_s = tostring(meta.object_type)
+
+// Parse timestamps
+| extend firstSeen_t = todatetime(first_seen)
+| extend lastSeen_t = todatetime(last_seen)
+
+// Extract IP and domain from different field types
+| extend ip_s = case(
+    ['type'] == 'ip', tostring(identifier),
+    isnotempty(tostring(meta.ip_address)), tostring(meta.ip_address),
+    ''
+)
+
+// Extract domain - from URL if type is url, or from domain field
+| extend domain_s = case(
+    ['type'] == 'url' and isnotempty(url), extract(@'://([^/:]+)', 1, tostring(url)),
+    ['type'] == 'domain', tostring(identifier),
+    isnotempty(tostring(domain)), tostring(domain),
+    ''
+)
+
+// Extract file hash
+| extend fileHash_s = case(
+    ['type'] == 'file', tostring(identifier),
+    ''
+)
+
+// Parse relationships as JSON string for storage
+| extend relationships_s = tostring(relationships)
+
+// Parse detection methods array
+| extend detection_methods_s = tostring(detection_methods)
+
+// Extract action field (+, =, -)
+| extend action_s = tostring(action)
+
+// Add source identifier
+| extend source_s = 'Cyren'
+
+// Project final schema matching Cyren_Indicators_CL table
+| project 
+    TimeGenerated = now(),
+    url_s,
+    ip_s,
+    fileHash_s,
+    domain_s,
+    protocol_s,
+    port_d,
+    category_s,
+    risk_d,
+    firstSeen_t,
+    lastSeen_t,
+    source_s,
+    relationships_s,
+    detection_methods_s,
+    action_s,
+    type_s,
+    identifier_s,
+    detection_ts_t,
+    object_type_s

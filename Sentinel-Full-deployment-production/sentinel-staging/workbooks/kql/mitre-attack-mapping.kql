@@ -1,0 +1,183 @@
+// MITRE ATT&CK FRAMEWORK MAPPING
+// Innovation: Automated technique mapping from threat intelligence
+// Maps Cyren and TacitRed indicators to MITRE ATT&CK tactics and techniques
+
+let attackWindow = {TimeRange:start} .. {TimeRange:end};
+
+// === CREDENTIAL ACCESS TECHNIQUES (Tactic: TA0006) ===
+let CredentialAccessTechniques = TacitRed_Findings_CL
+| where TimeGenerated {TimeRange}
+| extend 
+    Email = tostring(email_s),
+    FindingType = tostring(findingType_s),
+    Confidence = todouble(confidence_d),
+    Domain = tostring(domain_s)
+| extend 
+    // Map finding types to MITRE techniques
+    MitreTechnique = case(
+        FindingType contains "credential" or FindingType contains "password", "T1078 - Valid Accounts",
+        FindingType contains "dump", "T1003 - OS Credential Dumping",
+        FindingType contains "keylog", "T1056.001 - Keylogging",
+        FindingType contains "brute" or FindingType contains "spray", "T1110 - Brute Force",
+        "T1552 - Unsecured Credentials"  // Default mapping
+    ),
+    MitreTactic = "TA0006 - Credential Access",
+    ThreatSource = "TacitRed"
+| summarize 
+    Detections = count(),
+    UniqueAccounts = dcount(Email),
+    UniqueDomains = dcount(Domain),
+    AvgConfidence = round(avg(Confidence), 2),
+    AffectedAccounts = make_set(Email, 10)
+    by MitreTactic, MitreTechnique, ThreatSource;
+
+// === INITIAL ACCESS TECHNIQUES (Tactic: TA0001) ===
+let InitialAccessTechniques = Cyren_MalwareUrls_CL
+| where TimeGenerated {TimeRange}
+| extend payload = parse_json(payload_s)
+| extend 
+    Category = tostring(parse_json(tostring(payload.detection.category))[0]),
+    Type = tostring(payload.type),
+    Risk = toint(coalesce(payload.risk, 50)),
+    Domain = tostring(coalesce(payload.domain, extract(@"://([^/]+)", 1, tostring(payload.url))))
+| extend 
+    // Map categories to MITRE techniques
+    MitreTechnique = case(
+        Category contains "phish" or Type contains "phish", "T1566 - Phishing",
+        Category contains "exploit" or Category contains "vulnerability", "T1190 - Exploit Public-Facing Application",
+        Category contains "drive-by" or Category contains "watering", "T1189 - Drive-by Compromise",
+        Category contains "supply", "T1195 - Supply Chain Compromise",
+        "T1566.002 - Phishing: Spearphishing Link"  // Default for malicious URLs
+    ),
+    MitreTactic = "TA0001 - Initial Access",
+    ThreatSource = "Cyren"
+| summarize 
+    Detections = count(),
+    UniqueDomains = dcount(Domain),
+    AvgRisk = round(avg(Risk), 2),
+    MaxRisk = max(Risk),
+    MaliciousDomains = make_set(Domain, 10)
+    by MitreTactic, MitreTechnique, ThreatSource;
+
+// === COMMAND AND CONTROL TECHNIQUES (Tactic: TA0011) ===
+let C2Techniques = Cyren_MalwareUrls_CL
+| where TimeGenerated {TimeRange}
+| extend payload = parse_json(payload_s)
+| extend 
+    Category = tostring(parse_json(tostring(payload.detection.category))[0]),
+    Protocol = tostring(payload.meta.protocol),
+    Port = toint(payload.meta.port),
+    Risk = toint(coalesce(payload.risk, 50)),
+    Domain = tostring(coalesce(payload.domain, extract(@"://([^/]+)", 1, tostring(payload.url))))
+| where Category contains "c2" or Category contains "command" or Category contains "control" or 
+        Category contains "botnet" or Protocol in ("http", "https", "dns")
+| extend 
+    MitreTechnique = case(
+        Category contains "dns", "T1071.004 - DNS",
+        Protocol == "https" or Protocol == "http", "T1071.001 - Web Protocols",
+        Category contains "encrypted", "T1573 - Encrypted Channel",
+        "T1071 - Application Layer Protocol"
+    ),
+    MitreTactic = "TA0011 - Command and Control",
+    ThreatSource = "Cyren"
+| summarize 
+    Detections = count(),
+    UniqueInfrastructure = dcount(Domain),
+    AvgRisk = round(avg(Risk), 2),
+    MaxRisk = max(Risk),
+    C2Servers = make_set(Domain, 10)
+    by MitreTactic, MitreTechnique, ThreatSource;
+
+// === PERSISTENCE TECHNIQUES (Tactic: TA0003) ===
+let PersistenceTechniques = union Cyren_MalwareUrls_CL, TacitRed_Findings_CL
+| where TimeGenerated >= ago(30d)  // Look for persistent activity
+| extend 
+    Indicator = case(
+        $table == "Cyren_MalwareUrls_CL", 
+            tostring(coalesce(
+                parse_json(payload_s).domain,
+                extract(@"://([^/]+)", 1, tostring(parse_json(payload_s).url))
+            )),
+        tostring(domain_s)
+    ),
+    DetectionTime = TimeGenerated
+| where isnotempty(Indicator)
+| summarize 
+    DetectionDays = dcount(bin(DetectionTime, 1d)),
+    FirstSeen = min(DetectionTime),
+    LastSeen = max(DetectionTime),
+    Source = any($table)
+    by Indicator
+| extend 
+    LifespanDays = datetime_diff('day', LastSeen, FirstSeen),
+    IsActive = datetime_diff('hour', now(), LastSeen) <= 48
+| where DetectionDays >= 7  // Persistent = seen on 7+ different days
+| extend 
+    MitreTactic = "TA0003 - Persistence",
+    MitreTechnique = case(
+        Source == "Cyren_MalwareUrls_CL", "T1584 - Compromise Infrastructure",
+        "T1078 - Valid Accounts"
+    ),
+    ThreatSource = case(
+        Source == "Cyren_MalwareUrls_CL", "Cyren",
+        "TacitRed"
+    )
+| where TimeGenerated {TimeRange}
+| summarize 
+    Detections = count(),
+    PersistentIndicators = dcount(Indicator),
+    AvgLifespan = round(avg(LifespanDays), 2),
+    MaxLifespan = max(LifespanDays),
+    ActiveIndicators = countif(IsActive)
+    by MitreTactic, MitreTechnique, ThreatSource;
+
+// === UNION ALL TECHNIQUES ===
+union CredentialAccessTechniques, InitialAccessTechniques, C2Techniques, PersistenceTechniques
+| extend 
+    // Calculate technique severity
+    TechniqueSeverity = case(
+        Detections >= 50, "🔴 Critical",
+        Detections >= 20, "🟠 High",
+        Detections >= 5, "🟡 Medium",
+        "🟢 Low"
+    ),
+    // Prioritize techniques
+    Priority = case(
+        Detections >= 50, 1,
+        Detections >= 20, 2,
+        Detections >= 5, 3,
+        4
+    )
+| project 
+    Priority,
+    MitreTactic,
+    MitreTechnique,
+    ThreatSource,
+    Detections,
+    TechniqueSeverity,
+    UniqueAccounts = coalesce(UniqueAccounts, 0),
+    UniqueDomains = coalesce(UniqueDomains, 0),
+    UniqueInfrastructure = coalesce(UniqueInfrastructure, 0),
+    PersistentIndicators = coalesce(PersistentIndicators, 0),
+    AvgConfidence = coalesce(AvgConfidence, 0.0),
+    AvgRisk = coalesce(AvgRisk, 0.0),
+    MaxRisk = coalesce(MaxRisk, 0)
+| order by Priority asc, Detections desc
+
+// === MITRE ATT&CK COVERAGE HEATMAP ===
+// Shows which tactics are most active
+| summarize 
+    TotalDetections = sum(Detections),
+    UniqueTechniques = dcount(MitreTechnique),
+    CriticalTechniques = countif(TechniqueSeverity == "🔴 Critical"),
+    HighTechniques = countif(TechniqueSeverity == "🟠 High")
+    by MitreTactic
+| extend 
+    TacticRiskScore = (CriticalTechniques * 100) + (HighTechniques * 60) + (TotalDetections * 10),
+    CoverageLevel = case(
+        UniqueTechniques >= 5, "🔴 High Coverage - Multiple Attack Paths",
+        UniqueTechniques >= 3, "🟠 Medium Coverage - Several Techniques",
+        UniqueTechniques >= 1, "🟡 Low Coverage - Limited Techniques",
+        "🟢 No Activity"
+    )
+| order by TacticRiskScore desc

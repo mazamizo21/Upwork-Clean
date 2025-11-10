@@ -1,0 +1,41 @@
+// Parser function for TacitRed findings
+// Normalizes TacitRed_Findings_CL table for consistent querying
+// Usage: parser_tacitred_findings() | where Confidence > 80
+
+.create-or-alter function with (docstring="Normalize TacitRed compromised credential findings", folder="ThreatIntel/Parsers") 
+parser_tacitred_findings() {
+    TacitRed_Findings_CL
+    | extend 
+        // Normalize field names
+        Email = tostring(email_s),
+        Domain = tostring(domain_s),
+        FindingType = tostring(findingType_s),
+        Confidence = todouble(confidence_d),
+        FirstSeen = todatetime(firstSeen_t),
+        LastSeen = todatetime(lastSeen_t),
+        Notes = tostring(notes_s),
+        Source = tostring(source_s)
+    | extend
+        // Extract username from email
+        Username = tostring(split(Email, "@")[0]),
+        // Calculate age of finding
+        FindingAgeDays = datetime_diff('day', now(), FirstSeen),
+        // Determine if finding is recent (last 7 days)
+        IsRecent = (datetime_diff('day', now(), LastSeen) <= 7),
+        // Determine if finding is active (last 48 hours)
+        IsActive = (datetime_diff('hour', now(), LastSeen) <= 48)
+    | project 
+        TimeGenerated,
+        Email,
+        Username,
+        Domain,
+        FindingType,
+        Confidence,
+        FirstSeen,
+        LastSeen,
+        FindingAgeDays,
+        IsRecent,
+        IsActive,
+        Notes,
+        Source
+}
