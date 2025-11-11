@@ -1,0 +1,42 @@
+{
+  "LogicApps": [
+    {
+      "Error": "None",
+      "DCR_RBAC": false,
+      "Healthy": false,
+      "DCE_RBAC": true,
+      "LastRunStatus": "Succeeded",
+      "Name": "logic-cyren-ip-reputation"
+    },
+    {
+      "Error": "None",
+      "DCR_RBAC": false,
+      "Healthy": false,
+      "DCE_RBAC": true,
+      "LastRunStatus": "Succeeded",
+      "Name": "logic-cyren-malware-urls"
+    },
+    {
+      "Error": "None",
+      "DCR_RBAC": false,
+      "Healthy": false,
+      "DCE_RBAC": true,
+      "LastRunStatus": "Failed",
+      "Name": "logic-tacitred-ingestion"
+    }
+  ],
+  "Timestamp": "2025-11-11 16:46:46",
+  "Tables": [
+    {
+      "Healthy": false,
+      "Table": "Cyren_Indicators_CL",
+      "RowCount": 0
+    },
+    {
+      "Healthy": false,
+      "Table": "TacitRed_Findings_CL",
+      "RowCount": 0
+    }
+  ],
+  "OverallStatus": "Incomplete"
+}

@@ -183,3 +183,42 @@ output logicAppId string = logicApp.id
 output logicAppName string = logicApp.name
 output principalId string = logicApp.identity.principalId
 output identityType string = logicApp.identity.type
+
+// Monitoring Metrics Publisher role ID
+var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
+
+// Reference existing DCR and DCE for RBAC assignments
+resource dcr 'Microsoft.Insights/dataCollectionRules@2022-06-01' existing = {
+  name: last(split(dcrImmutableId, '-')[0])
+}
+
+resource dce 'Microsoft.Insights/dataCollectionEndpoints@2022-06-01' existing = {
+  name: last(split(dceEndpoint, '/')[2])
+}
+
+// Role assignment name includes deployment uniqueness to avoid update conflicts on recreate
+resource roleAssignmentDcr 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(dcr.id, logicApp.name, monitoringMetricsPublisherRoleId, uniqueString(deployment().name))
+  scope: dcr
+  properties: {
+    principalId: logicApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', monitoringMetricsPublisherRoleId)
+  }
+  dependsOn: [
+    logicApp
+  ]
+}
+
+resource roleAssignmentDce 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(dce.id, logicApp.name, monitoringMetricsPublisherRoleId, uniqueString(deployment().name))
+  scope: dce
+  properties: {
+    principalId: logicApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', monitoringMetricsPublisherRoleId)
+  }
+  dependsOn: [
+    logicApp
+  ]
+}

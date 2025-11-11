@@ -1,0 +1,1 @@
+pwsh -NoProfile -ExecutionPolicy Bypass -File "d:\REPO\Upwork-Clean\Sentinel-Full-deployment-production\sentinel-staging\DEPLOY-COMPLETE.ps1"

@@ -1,0 +1,17 @@
+[
+  {
+    "Principal": "6cac7a0c-fb52-417d-a8ed-70f4e8211c16",
+    "Status": "Deployed",
+    "LogicApp": "logic-cyren-ip-reputation"
+  },
+  {
+    "Principal": "34a882e8-7063-4c0d-b285-e3940fafaa8f",
+    "Status": "Deployed",
+    "LogicApp": "logic-cyren-malware-urls"
+  },
+  {
+    "Principal": "73c9897f-8cb1-4afa-b119-6dba02e9cb00",
+    "Status": "Deployed",
+    "LogicApp": "logic-tacitred-ingestion"
+  }
+]
