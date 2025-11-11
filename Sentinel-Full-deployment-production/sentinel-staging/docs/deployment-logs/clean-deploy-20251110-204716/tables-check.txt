@@ -1,0 +1,11 @@
+Checking tables in workspace SentinelTestStixImportInstance...
+============================================================
+
+ALL TABLES WITH DATA (last 7 days):
+
+KEY TABLES FOR ANALYTICS RULES:
+------------------------------------------------------------
+❌ TacitRed_Findings_CL - NOT FOUND
+❌ Cyren_Indicators_CL - NOT FOUND
+❌ SigninLogs - NOT FOUND (Cannot enable High-Risk User rule)
+❌ IdentityInfo - NOT FOUND (Cannot enable 2 rules)

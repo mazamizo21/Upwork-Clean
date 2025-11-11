@@ -5,17 +5,23 @@
 // Tactics: Credential Access, Collection
 // Frequency: 6 hours
 // Query Period: 7 days
+// VERSION: NO-PARSER (uses direct table access)
 
 let lookbackPeriod = 7d;
 let departmentThreshold = 3; // Alert if 3+ users in same department
 // Get recent compromised users
-let CompromisedUsers = parser_tacitred_findings()
+let CompromisedUsers = TacitRed_Findings_CL
     | where TimeGenerated >= ago(lookbackPeriod)
-    | where IsRecent == true
+    | extend
+        Email = tostring(email_s),
+        FindingType = tostring(findingType_s),
+        Confidence = todouble(confidence_d),
+        FirstSeen = todatetime(firstSeen_t),
+        LastSeen = todatetime(lastSeen_t)
     | summarize 
         CompromiseCount = count(),
-        FirstSeen = min(FirstSeen),
-        LastSeen = max(LastSeen),
+        EarliestCompromise = min(FirstSeen),
+        LatestCompromise = max(LastSeen),
         FindingTypes = make_set(FindingType),
         AvgConfidence = avg(Confidence)
         by Email;

@@ -23,7 +23,7 @@ param dcrImmutableId string
 param dceEndpoint string
 
 @description('Stream name for ingestion')
-param streamName string = 'Custom-TacitRed_Findings_CL'
+param streamName string = 'Custom-TacitRed_Findings_Raw'
 
 @description('Polling interval in minutes')
 param pollingIntervalMinutes int = 15

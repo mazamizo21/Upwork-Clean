@@ -6,9 +6,10 @@ param location string = resourceGroup().location
 
 @description('Enable or disable individual rules')
 param enableRepeatCompromise bool = true
-param enableHighRiskUser bool = true
-param enableActiveCompromisedAccount bool = true
-param enableDepartmentCluster bool = true
+param enableHighRiskUser bool = false // Disabled - requires SigninLogs table
+param enableActiveCompromisedAccount bool = false // Disabled - requires IdentityInfo table
+param enableDepartmentCluster bool = false // Disabled - requires IdentityInfo table
+param enableMalwareInfrastructure bool = true
 param enableCrossFeedCorrelation bool = false // Disabled until Cyren is available
 
 resource workspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' existing = {
@@ -18,14 +19,14 @@ resource workspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' existin
 // Analytics Rule 1: Repeat Compromise Detection
 resource ruleRepeatCompromise 'Microsoft.SecurityInsights/alertRules@2023-02-01' = if (enableRepeatCompromise) {
   scope: workspace
-  name: guid(workspace.id, 'RepeatCompromise')
+  name: guid(workspace.id, 'RepeatCompromise-v2')
   kind: 'Scheduled'
   properties: {
     displayName: 'TacitRed - Repeat Compromise Detection'
     description: 'Detects users who have been compromised multiple times within a 7-day window. This may indicate a persistent threat or inadequate remediation.'
     severity: 'High'
     enabled: true
-    query: loadTextContent('../analytics-rules/rule-repeat-compromise.kql')
+    query: loadTextContent('./rules/rule-repeat-compromise.kql')
     queryFrequency: 'PT1H'
     queryPeriod: 'P7D'
     triggerOperator: 'GreaterThan'
@@ -101,14 +102,14 @@ resource ruleRepeatCompromise 'Microsoft.SecurityInsights/alertRules@2023-02-01'
 // Analytics Rule 2: High-Risk User Compromised
 resource ruleHighRiskUser 'Microsoft.SecurityInsights/alertRules@2023-02-01' = if (enableHighRiskUser) {
   scope: workspace
-  name: guid(workspace.id, 'HighRiskUserCompromised')
+  name: guid(workspace.id, 'HighRiskUserCompromised-v2')
   kind: 'Scheduled'
   properties: {
     displayName: 'TacitRed - High-Risk User Compromised'
     description: 'Detects when a user with risky sign-ins is also found in TacitRed compromised credentials. Correlates multiple threat signals.'
     severity: 'High'
     enabled: true
-    query: loadTextContent('../analytics-rules/rule-high-risk-user-compromised.kql')
+    query: loadTextContent('./rules/rule-high-risk-user-compromised.kql')
     queryFrequency: 'PT1H'
     queryPeriod: 'P7D'
     triggerOperator: 'GreaterThan'
@@ -183,14 +184,14 @@ resource ruleHighRiskUser 'Microsoft.SecurityInsights/alertRules@2023-02-01' = i
 // Analytics Rule 3: Active Compromised Account
 resource ruleActiveCompromised 'Microsoft.SecurityInsights/alertRules@2023-02-01' = if (enableActiveCompromisedAccount) {
   scope: workspace
-  name: guid(workspace.id, 'ActiveCompromisedAccount')
+  name: guid(workspace.id, 'ActiveCompromisedAccount-v2')
   kind: 'Scheduled'
   properties: {
     displayName: 'TacitRed - Active Compromised Account'
     description: 'Detects compromised users who still have active/enabled accounts in Entra ID. These accounts should be disabled or reset immediately.'
     severity: 'High'
     enabled: true
-    query: loadTextContent('../analytics-rules/rule-active-compromised-account.kql')
+    query: loadTextContent('./rules/rule-active-compromised-account.kql')
     queryFrequency: 'PT6H'
     queryPeriod: 'P14D'
     triggerOperator: 'GreaterThan'
@@ -258,14 +259,14 @@ resource ruleActiveCompromised 'Microsoft.SecurityInsights/alertRules@2023-02-01
 // Analytics Rule 4: Department Compromise Cluster
 resource ruleDepartmentCluster 'Microsoft.SecurityInsights/alertRules@2023-02-01' = if (enableDepartmentCluster) {
   scope: workspace
-  name: guid(workspace.id, 'DepartmentCompromiseCluster')
+  name: guid(workspace.id, 'DepartmentCompromiseCluster-v2')
   kind: 'Scheduled'
   properties: {
     displayName: 'TacitRed - Department Compromise Cluster'
     description: 'Detects when multiple users from the same department are compromised. May indicate targeted campaign or department-wide vulnerability.'
     severity: 'High'
     enabled: true
-    query: loadTextContent('../analytics-rules/rule-department-compromise-cluster.kql')
+    query: loadTextContent('./rules/rule-department-compromise-cluster.kql')
     queryFrequency: 'PT6H'
     queryPeriod: 'P7D'
     triggerOperator: 'GreaterThan'
@@ -329,17 +330,96 @@ resource ruleDepartmentCluster 'Microsoft.SecurityInsights/alertRules@2023-02-01
   }
 }
 
-// Analytics Rule 5: Cross-Feed Correlation (Disabled by default until Cyren is available)
+// Analytics Rule 5: Malware Infrastructure Correlation
+resource ruleMalwareInfra 'Microsoft.SecurityInsights/alertRules@2023-02-01' = if (enableMalwareInfrastructure) {
+  scope: workspace
+  name: guid(workspace.id, 'MalwareInfrastructure-v2')
+  kind: 'Scheduled'
+  properties: {
+    displayName: 'Cyren + TacitRed - Malware Infrastructure'
+    description: 'Detects when compromised domains (TacitRed) host malware/phishing infrastructure (Cyren). Indicates active exploitation.'
+    severity: 'High'
+    enabled: true
+    query: loadTextContent('./rules/rule-malware-infrastructure.kql')
+    queryFrequency: 'PT8H'
+    queryPeriod: 'P14D'
+    triggerOperator: 'GreaterThan'
+    triggerThreshold: 0
+    suppressionDuration: 'PT8H'
+    suppressionEnabled: false
+    tactics: [
+      'CommandAndControl'
+      'InitialAccess'
+    ]
+    techniques: [
+      'T1566' // Phishing
+      'T1071' // Application Layer Protocol
+    ]
+    alertRuleTemplateName: null
+    incidentConfiguration: {
+      createIncident: true
+      groupingConfiguration: {
+        enabled: true
+        reopenClosedIncident: false
+        lookbackDuration: 'P7D'
+        matchingMethod: 'Selected'
+        groupByEntities: [
+          'DNS'
+          'Account'
+        ]
+        groupByAlertDetails: []
+        groupByCustomDetails: []
+      }
+    }
+    eventGroupingSettings: {
+      aggregationKind: 'AlertPerResult'
+    }
+    alertDetailsOverride: {
+      alertDisplayNameFormat: 'Malware Infrastructure on {{Domain}} - {{UserCount}} compromised users'
+      alertDescriptionFormat: 'Compromised domain {{Domain}} is hosting malware (Risk: {{MaxRiskScore}}). {{UserCount}} user(s) compromised'
+      alertSeverityColumnName: 'Severity'
+      alertDynamicProperties: []
+    }
+    customDetails: {
+      CompromisedUsers: 'CompromisedUsers'
+      Categories: 'Categories'
+      RiskScore: 'MaxRiskScore'
+      FindingTypes: 'FindingTypes'
+    }
+    entityMappings: [
+      {
+        entityType: 'Account'
+        fieldMappings: [
+          {
+            identifier: 'FullName'
+            columnName: 'CompromisedUsers'
+          }
+        ]
+      }
+      {
+        entityType: 'DNS'
+        fieldMappings: [
+          {
+            identifier: 'DomainName'
+            columnName: 'Domain'
+          }
+        ]
+      }
+    ]
+  }
+}
+
+// Analytics Rule 6: Cross-Feed Correlation (Disabled by default until Cyren is available)
 resource ruleCrossFeed 'Microsoft.SecurityInsights/alertRules@2023-02-01' = if (enableCrossFeedCorrelation) {
   scope: workspace
-  name: guid(workspace.id, 'CrossFeedCorrelation')
+  name: guid(workspace.id, 'CrossFeedCorrelation-v2')
   kind: 'Scheduled'
   properties: {
     displayName: 'TacitRed + Cyren - Cross-Feed Correlation'
     description: 'Detects when a compromised domain (TacitRed) matches active malicious infrastructure (Cyren). Indicates active exploitation.'
     severity: 'Critical'
     enabled: true
-    query: loadTextContent('../analytics-rules/rule-cross-feed-correlation.kql')
+    query: loadTextContent('./rules/rule-cross-feed-correlation.kql')
     queryFrequency: 'PT1H'
     queryPeriod: 'P7D'
     triggerOperator: 'GreaterThan'
@@ -427,5 +507,6 @@ output ruleIds array = [
   enableHighRiskUser ? ruleHighRiskUser.id : ''
   enableActiveCompromisedAccount ? ruleActiveCompromised.id : ''
   enableDepartmentCluster ? ruleDepartmentCluster.id : ''
+  enableMalwareInfrastructure ? ruleMalwareInfra.id : ''
   enableCrossFeedCorrelation ? ruleCrossFeed.id : ''
 ]

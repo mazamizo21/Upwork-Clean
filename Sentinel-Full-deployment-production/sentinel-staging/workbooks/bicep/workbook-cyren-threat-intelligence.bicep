@@ -53,41 +53,43 @@ resource cyrenWorkbook 'Microsoft.Insights/workbooks@2022-04-01' = {
           content: {
             version: 'KqlItem/1.0'
             query: '''
-Cyren_Indicators_CL
+union Cyren_MalwareUrls_CL, Cyren_IpReputation_CL
 | where TimeGenerated {TimeRange}
+| extend payload = parse_json(payload_s)
+| extend 
+    Risk = toint(coalesce(payload.risk, payload.score, 50)),
+    IP = tostring(coalesce(payload.ip, payload.ipAddress, "")),
+    URL = tostring(coalesce(payload.url, payload.malwareUrl, ""))
 | summarize 
     TotalIndicators = count(),
-    UniqueIPs = dcount(ip_s),
-    UniqueURLs = dcount(url_s),
-    HighRisk = countif(toint(risk_d) >= 80),
-    MediumRisk = countif(toint(risk_d) >= 50 and toint(risk_d) < 80),
-    LowRisk = countif(toint(risk_d) < 50)
-| project 
-    ["Total Indicators"] = TotalIndicators,
-    ["Unique IPs"] = UniqueIPs,
-    ["Unique URLs"] = UniqueURLs,
-    ["High Risk (≥80)"] = HighRisk,
-    ["Medium Risk (50-79)"] = MediumRisk,
-    ["Low Risk (<50)"] = LowRisk
+    UniqueIPs = dcount(IP),
+    UniqueURLs = dcount(URL),
+    HighRisk = countif(Risk >= 80),
+    MediumRisk = countif(Risk >= 50 and Risk < 80),
+    LowRisk = countif(Risk < 50)
 '''
-            size: 4
+            size: 0
             title: 'Threat Intelligence Overview'
             queryType: 0
             resourceType: 'microsoft.operationalinsights/workspaces'
-            visualization: 'tiles'
-            tileSettings: {
-              titleContent: {
-                columnMatch: 'Column'
-                formatter: 1
-              }
-              leftContent: {
-                columnMatch: 'Value'
-                formatter: 12
-                formatOptions: {
-                  palette: 'auto'
+            visualization: 'table'
+            gridSettings: {
+              formatters: [
+                {
+                  columnMatch: 'TotalIndicators'
+                  formatter: 4
+                  formatOptions: {
+                    palette: 'blue'
+                  }
                 }
-              }
-              showBorder: true
+                {
+                  columnMatch: 'HighRisk'
+                  formatter: 4
+                  formatOptions: {
+                    palette: 'red'
+                  }
+                }
+              ]
             }
           }
         }
@@ -97,13 +99,15 @@ Cyren_Indicators_CL
           content: {
             version: 'KqlItem/1.0'
             query: '''
-Cyren_Indicators_CL
+union Cyren_MalwareUrls_CL, Cyren_IpReputation_CL
 | where TimeGenerated {TimeRange}
+| extend payload = parse_json(payload_s)
+| extend Risk = toint(coalesce(payload.risk, payload.score, 50))
 | extend RiskBucket = case(
-    toint(risk_d) >= 80, "Critical (80-100)",
-    toint(risk_d) >= 60, "High (60-79)",
-    toint(risk_d) >= 40, "Medium (40-59)",
-    toint(risk_d) >= 20, "Low (20-39)",
+    Risk >= 80, "Critical (80-100)",
+    Risk >= 60, "High (60-79)",
+    Risk >= 40, "Medium (40-59)",
+    Risk >= 20, "Low (20-39)",
     "Minimal (<20)"
 )
 | summarize Count = count() by RiskBucket, bin(TimeGenerated, 1h)
@@ -122,20 +126,25 @@ Cyren_Indicators_CL
           content: {
             version: 'KqlItem/1.0'
             query: '''
-Cyren_Indicators_CL
+union Cyren_MalwareUrls_CL, Cyren_IpReputation_CL
 | where TimeGenerated {TimeRange}
-| where isnotempty(domain_s)
-| extend Domain = tolower(tostring(domain_s))
+| extend payload = parse_json(payload_s)
+| extend 
+    Domain = tolower(tostring(coalesce(payload.domain, payload.host, ""))),
+    Risk = toint(coalesce(payload.risk, payload.score, 50)),
+    Category = tostring(coalesce(payload.category, payload.type, "")),
+    FirstSeen = coalesce(todatetime(payload.firstSeen), todatetime(payload.first_seen), TimeGenerated),
+    LastSeen = coalesce(todatetime(payload.lastSeen), todatetime(payload.last_seen), TimeGenerated)
+| where isnotempty(Domain)
 | summarize 
     Count = count(),
-    MaxRisk = max(toint(risk_d)),
-    Categories = make_set(category_s),
-    Types = make_set(type_s),
-    FirstSeen = min(todatetime(firstSeen_t)),
-    LastSeen = max(todatetime(lastSeen_t))
+    MaxRisk = max(Risk),
+    Categories = make_set(Category),
+    EarliestSeen = min(FirstSeen),
+    LatestSeen = max(LastSeen)
     by Domain
 | top 20 by MaxRisk desc
-| project Domain, MaxRisk, Count, Categories, Types, FirstSeen, LastSeen
+| project Domain, MaxRisk, Count, Categories, FirstSeen = EarliestSeen, LastSeen = LatestSeen
 '''
             size: 0
             title: 'Top 20 Malicious Domains (by Risk Score)'
@@ -177,9 +186,10 @@ Cyren_Indicators_CL
           content: {
             version: 'KqlItem/1.0'
             query: '''
-Cyren_Indicators_CL
+union Cyren_MalwareUrls_CL, Cyren_IpReputation_CL
 | where TimeGenerated {TimeRange}
-| extend Category = tolower(tostring(category_s))
+| extend payload = parse_json(payload_s)
+| extend Category = tolower(tostring(coalesce(payload.category, payload.type, "unknown")))
 | where isnotempty(Category)
 | summarize Count = count() by Category
 | order by Count desc
@@ -198,9 +208,10 @@ Cyren_Indicators_CL
           content: {
             version: 'KqlItem/1.0'
             query: '''
-Cyren_Indicators_CL
+union Cyren_MalwareUrls_CL, Cyren_IpReputation_CL
 | where TimeGenerated {TimeRange}
-| extend Type = tolower(tostring(type_s))
+| extend payload = parse_json(payload_s)
+| extend Type = tolower(tostring(coalesce(payload.type, payload.indicatorType, "unknown")))
 | where isnotempty(Type)
 | summarize Count = count() by Type
 | order by Count desc
@@ -219,45 +230,50 @@ Cyren_Indicators_CL
           content: {
             version: 'KqlItem/1.0'
             query: '''
-let CyrenDomains = Cyren_Indicators_CL
+let CyrenDomains = union Cyren_MalwareUrls_CL, Cyren_IpReputation_CL
 | where TimeGenerated {TimeRange}
-| extend d = tolower(tostring(domain_s))
-| extend u = tostring(url_s)
+| extend payload = parse_json(payload_s)
+| extend 
+    d = tolower(tostring(coalesce(payload.domain, payload.host, ""))),
+    u = tostring(coalesce(payload.url, payload.malwareUrl, "")),
+    Risk = toint(coalesce(payload.risk, payload.score, 50)),
+    Category = tostring(coalesce(payload.category, payload.type, ""))
 | extend host = iif(isnotempty(d), d, extract(@"://([^/]+)", 1, u))
 | extend p = split(host, '.')
 | extend RegDomain = iif(array_length(p) >= 2, strcat(p[-2], '.', p[-1]), host)
 | where isnotempty(RegDomain)
 | summarize 
     CyrenCount = count(),
-    MaxRisk = max(toint(risk_d)),
-    CyrenCategories = make_set(category_s),
-    CyrenTypes = make_set(type_s)
+    MaxRisk = max(Risk),
+    CyrenCategories = make_set(Category)
     by RegDomain;
 
 let TacitRedDomains = TacitRed_Findings_CL
 | where TimeGenerated {TimeRange}
-| extend d = tolower(tostring(domain_s))
+| extend 
+    d = tolower(tostring(domain_s)),
+    Email = tostring(coalesce(email_s, username_s, "")),
+    FindingType = tostring(findingType_s)
 | extend p = split(d, '.')
 | extend RegDomain = iif(array_length(p) >= 2, strcat(p[-2], '.', p[-1]), d)
 | where isnotempty(RegDomain)
 | summarize 
-    CompromisedUsers = dcount(tostring(email_s)),
+    CompromisedUsers = dcount(Email),
     TacitRedCount = count(),
-    FindingTypes = make_set(tostring(findingType_s))
+    FindingTypes = make_set(FindingType)
     by RegDomain;
 
 CyrenDomains
 | join kind=inner (TacitRedDomains) on RegDomain
 | project 
     Domain = RegDomain,
-    ["Cyren Risk"] = MaxRisk,
-    ["Cyren Indicators"] = CyrenCount,
-    ["TacitRed Findings"] = TacitRedCount,
-    ["Compromised Users"] = CompromisedUsers,
-    ["Cyren Categories"] = CyrenCategories,
-    ["Cyren Types"] = CyrenTypes,
-    ["Finding Types"] = FindingTypes
-| order by MaxRisk desc
+    CyrenRisk = MaxRisk,
+    CyrenIndicators = CyrenCount,
+    TacitRedFindings = TacitRedCount,
+    CompromisedUsers,
+    CyrenCategories,
+    FindingTypes
+| order by CyrenRisk desc
 '''
             size: 0
             title: 'TacitRed ↔ Cyren Correlation (Overlapping Domains)'
@@ -267,7 +283,7 @@ CyrenDomains
             gridSettings: {
               formatters: [
                 {
-                  columnMatch: 'Cyren Risk'
+                  columnMatch: 'CyrenRisk'
                   formatter: 8
                   formatOptions: {
                     min: 0
@@ -276,7 +292,7 @@ CyrenDomains
                   }
                 }
                 {
-                  columnMatch: 'Compromised Users'
+                  columnMatch: 'CompromisedUsers'
                   formatter: 4
                   formatOptions: {
                     palette: 'red'
@@ -293,18 +309,18 @@ CyrenDomains
           content: {
             version: 'KqlItem/1.0'
             query: '''
-Cyren_Indicators_CL
+union Cyren_MalwareUrls_CL, Cyren_IpReputation_CL
 | where TimeGenerated {TimeRange}
-| where toint(risk_d) >= 70
+| extend payload = parse_json(payload_s)
 | extend 
-    URL = tostring(url_s),
-    IP = tostring(ip_s),
-    Domain = tolower(tostring(domain_s)),
-    Risk = toint(risk_d),
-    Category = tolower(tostring(category_s)),
-    Type = tolower(tostring(type_s)),
-    LastSeen = todatetime(lastSeen_t)
-| project TimeGenerated, Risk, Domain, URL, IP, Category, Type, LastSeen
+    Risk = toint(coalesce(payload.risk, payload.score, 50)),
+    URL = tostring(coalesce(payload.url, payload.malwareUrl, "")),
+    IP = tostring(coalesce(payload.ip, payload.ipAddress, "")),
+    Domain = tolower(tostring(coalesce(payload.domain, payload.host, ""))),
+    Category = tolower(tostring(coalesce(payload.category, payload.type, ""))),
+    LastSeen = coalesce(todatetime(payload.lastSeen), todatetime(payload.last_seen), TimeGenerated)
+| where Risk >= 70
+| project TimeGenerated, Risk, Domain, URL, IP, Category, LastSeen
 | order by TimeGenerated desc
 | take 50
 '''
@@ -325,9 +341,9 @@ Cyren_Indicators_CL
                   formatOptions: {
                     thresholdsOptions: 'icons'
                     thresholdsGrid: [
-                      { operator: '>=' value: '90' icon: 'Sev0' }
-                      { operator: '>=' value: '70' icon: 'Sev1' }
-                      { operator: 'Default' icon: 'Sev2' }
+                      { operator: '>=', value: '90', icon: 'Sev0' }
+                      { operator: '>=', value: '70', icon: 'Sev1' }
+                      { operator: 'Default', icon: 'Sev2' }
                     ]
                   }
                 }
@@ -352,7 +368,7 @@ Cyren_Indicators_CL
           content: {
             version: 'KqlItem/1.0'
             query: '''
-Cyren_Indicators_CL
+union Cyren_MalwareUrls_CL, Cyren_IpReputation_CL
 | where TimeGenerated > ago(7d)
 | summarize Count = count() by bin(TimeGenerated, 1h)
 | render timechart
@@ -366,7 +382,7 @@ Cyren_Indicators_CL
         }
       ]
       styleSettings: {}
-      $schema: 'https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json'
+      '$schema': 'https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json'
     })
     version: '1.0'
     sourceId: workspaceId

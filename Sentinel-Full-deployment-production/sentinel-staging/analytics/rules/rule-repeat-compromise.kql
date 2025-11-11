@@ -4,11 +4,21 @@
 // Tactics: Credential Access, Initial Access
 // Frequency: 1 hour
 // Query Period: 7 days
+// VERSION: NO-PARSER (uses direct table access)
 
 let lookbackPeriod = 7d;
 let threshold = 2; // Alert if user compromised 2+ times
-parser_tacitred_findings()
+TacitRed_Findings_CL
 | where TimeGenerated >= ago(lookbackPeriod)
+| extend
+    Email = tostring(email_s),
+    Username = tostring(username_s),
+    Domain = tostring(domain_s),
+    FindingType = tostring(findingType_s),
+    Confidence = todouble(confidence_d),
+    FirstSeen = todatetime(firstSeen_t),
+    LastSeen = todatetime(lastSeen_t),
+    Notes = tostring(notes_s)
 | summarize 
     CompromiseCount = count(),
     FindingTypes = make_set(FindingType),

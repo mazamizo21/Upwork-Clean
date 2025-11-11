@@ -26,7 +26,7 @@ param dcrImmutableId string
 param dceEndpoint string
 
 @description('Stream name for ingestion')
-param streamName string = 'Custom-Cyren_IpReputation_CL'
+param streamName string = 'Custom-Cyren_IpReputation_Raw'
 
 @description('Fetch count per request')
 param fetchCount int = 10000

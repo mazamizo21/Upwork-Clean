@@ -5,11 +5,19 @@
 // Tactics: Persistence, Credential Access
 // Frequency: 6 hours
 // Query Period: 30 days
+// VERSION: NO-PARSER (uses direct table access)
 
 let lookbackPeriod = 30d;
 // Get recent TacitRed compromised users
-let CompromisedUsers = parser_tacitred_findings()
+let CompromisedUsers = TacitRed_Findings_CL
     | where TimeGenerated >= ago(lookbackPeriod)
+    | extend
+        Email = tostring(email_s),
+        Domain = tostring(domain_s),
+        FindingType = tostring(findingType_s),
+        Confidence = todouble(confidence_d),
+        FirstSeen = todatetime(firstSeen_t),
+        LastSeen = todatetime(lastSeen_t)
     | summarize 
         CompromiseCount = count(),
         FirstCompromise = min(FirstSeen),
