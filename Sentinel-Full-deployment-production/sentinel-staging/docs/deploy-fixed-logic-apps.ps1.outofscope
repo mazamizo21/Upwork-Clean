@@ -1,0 +1,208 @@
+# =============================================================================
+# Fixed Logic Apps Deployment Script
+# Deploys Logic Apps with corrected RBAC assignments
+# =============================================================================
+
+param(
+    [string]$ConfigFile = ".\client-config-COMPLETE.json"
+)
+
+# Initialize logging
+$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$logDir = ".\docs\deployment-logs"
+$logFile = "$logDir\logic-app-deployment-$timestamp.log"
+
+# Create log directory if it doesn't exist
+if (-not (Test-Path $logDir)) {
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+}
+
+function Write-Log {
+    param([string]$Message, [string]$Level = "INFO")
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "[$timestamp] [$Level] $Message"
+    Write-Host $logEntry -ForegroundColor $(
+        switch ($Level) {
+            "ERROR" { "Red" }
+            "WARN" { "Yellow" }
+            "SUCCESS" { "Green" }
+            default { "White" }
+        }
+    )
+    Add-Content -Path $logFile -Value $logEntry
+}
+
+try {
+    Write-Log "Starting fixed Logic Apps deployment..." "INFO"
+    
+    # Load configuration
+    if (-not (Test-Path $ConfigFile)) {
+        throw "Configuration file not found: $ConfigFile"
+    }
+    
+    $cfg = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+    $sub = $cfg.parameters.azure.value.subscriptionId
+    $rg = $cfg.parameters.azure.value.resourceGroupName
+    $location = $cfg.parameters.azure.value.location
+    
+    Write-Log "Using subscription: $sub" "INFO"
+    Write-Log "Using resource group: $rg" "INFO"
+    Write-Log "Using location: $location" "INFO"
+    
+    # Set Azure context
+    az account set --subscription "$sub" | Out-Null
+    Write-Log "Azure context set successfully" "SUCCESS"
+    
+    # Get DCR and DCE information
+    Write-Log "`n=== Getting DCR/DCE Information ===" "INFO"
+    
+    # Get DCE endpoint
+    $dceJson = az monitor data-collection endpoint show -g "$rg" --name "dce-sentinel-threatintel" -o json
+    $dce = $dceJson | ConvertFrom-Json
+    $dceEndpoint = $dce.properties.logsIngestionEndpoint
+    
+    Write-Log "DCE Endpoint: $dceEndpoint" "INFO"
+    
+    # Get DCR information
+    $dcrTacitRedJson = az monitor data-collection rule show -g "$rg" --name "dcr-tacitred-findings" -o json
+    $dcrTacitRed = $dcrTacitRedJson | ConvertFrom-Json
+    $dcrTacitRedImmutableId = $dcrTacitRed.properties.immutableId
+    $dcrTacitRedResourceId = $dcrTacitRed.id
+    
+    $dcrCyrenIpJson = az monitor data-collection rule show -g "$rg" --name "dcr-cyren-ip-reputation" -o json
+    $dcrCyrenIp = $dcrCyrenIpJson | ConvertFrom-Json
+    $dcrCyrenIpImmutableId = $dcrCyrenIp.properties.immutableId
+    $dcrCyrenIpResourceId = $dcrCyrenIp.id
+    
+    $dcrCyrenMalwareJson = az monitor data-collection rule show -g "$rg" --name "dcr-cyren-malware-urls" -o json
+    $dcrCyrenMalware = $dcrCyrenMalwareJson | ConvertFrom-Json
+    $dcrCyrenMalwareImmutableId = $dcrCyrenMalware.properties.immutableId
+    $dcrCyrenMalwareResourceId = $dcrCyrenMalware.id
+    
+    Write-Log "DCR TacitRed Immutable ID: $dcrTacitRedImmutableId" "INFO"
+    Write-Log "DCR Cyren IP Immutable ID: $dcrCyrenIpImmutableId" "INFO"
+    Write-Log "DCR Cyren Malware Immutable ID: $dcrCyrenMalwareImmutableId" "INFO"
+    
+    # Deploy TacitRed Logic App
+    Write-Log "`n=== Deploying TacitRed Logic App ===" "INFO"
+    $tacitRedDeploymentName = "la-tacitred-fixed-$timestamp"
+    $tacitRedParams = @{
+        logicAppName = "logic-tacitred-ingestion"
+        location = $location
+        tacitRedApiKey = $cfg.parameters.tacitRed.value.apiKey
+        tacitRedApiUrl = $cfg.parameters.tacitRed.value.apiBaseUrl
+        dcrImmutableId = $dcrTacitRedImmutableId
+        dceEndpoint = $dceEndpoint
+        dcrResourceId = $dcrTacitRedResourceId
+        dceResourceId = $dce.id
+    }
+    
+    $tacitRedParamsJson = $tacitRedParams | ConvertTo-Json -Compress
+    Write-Log "Deploying TacitRed Logic App with deployment name: $tacitRedDeploymentName" "INFO"
+    
+    $tacitRedResult = az deployment group create `
+        -g "$rg" `
+        -n "$tacitRedDeploymentName" `
+        --template-file ".\infrastructure\bicep\logicapp-tacitred-ingestion.bicep" `
+        --parameters "$tacitRedParamsJson" `
+        -o json
+    
+    if ($LASTEXITCODE -eq 0) {
+        Write-Log "✓ TacitRed Logic App deployment succeeded" "SUCCESS"
+    } else {
+        Write-Log "✗ TacitRed Logic App deployment failed" "ERROR"
+        Write-Log "Error details: $tacitRedResult" "ERROR"
+    }
+    
+    # Wait for identity propagation
+    Write-Log "Waiting 60 seconds for managed identity propagation..." "INFO"
+    Start-Sleep -Seconds 60
+    
+    # Deploy Cyren IP Reputation Logic App
+    Write-Log "`n=== Deploying Cyren IP Reputation Logic App ===" "INFO"
+    $cyrenIpDeploymentName = "la-cyren-ip-fixed-$timestamp"
+    $cyrenIpParams = @{
+        logicAppName = "logic-cyren-ip-reputation"
+        location = $location
+        cyrenIpReputationToken = $cfg.parameters.cyren.value.ipReputation.jwtToken
+        cyrenApiBaseUrl = $cfg.parameters.cyren.value.apiBaseUrl
+        cyrenIpReputationFeedId = $cfg.parameters.cyren.value.ipReputation.feedId
+        dcrImmutableId = $dcrCyrenIpImmutableId
+        dceEndpoint = $dceEndpoint
+        dcrResourceId = $dcrCyrenIpResourceId
+        dceResourceId = $dce.id
+    }
+    
+    $cyrenIpParamsJson = $cyrenIpParams | ConvertTo-Json -Compress
+    Write-Log "Deploying Cyren IP Logic App with deployment name: $cyrenIpDeploymentName" "INFO"
+    
+    $cyrenIpResult = az deployment group create `
+        -g "$rg" `
+        -n "$cyrenIpDeploymentName" `
+        --template-file ".\infrastructure\bicep\logicapp-cyren-ip-reputation.bicep" `
+        --parameters "$cyrenIpParamsJson" `
+        -o json
+    
+    if ($LASTEXITCODE -eq 0) {
+        Write-Log "✓ Cyren IP Logic App deployment succeeded" "SUCCESS"
+    } else {
+        Write-Log "✗ Cyren IP Logic App deployment failed" "ERROR"
+        Write-Log "Error details: $cyrenIpResult" "ERROR"
+    }
+    
+    # Wait for identity propagation
+    Write-Log "Waiting 60 seconds for managed identity propagation..." "INFO"
+    Start-Sleep -Seconds 60
+    
+    # Deploy Cyren Malware URLs Logic App
+    Write-Log "`n=== Deploying Cyren Malware URLs Logic App ===" "INFO"
+    $cyrenMalwareDeploymentName = "la-cyren-malware-fixed-$timestamp"
+    $cyrenMalwareParams = @{
+        logicAppName = "logic-cyren-malware-urls"
+        location = $location
+        cyrenMalwareUrlsToken = $cfg.parameters.cyren.value.malwareUrls.jwtToken
+        cyrenApiBaseUrl = $cfg.parameters.cyren.value.apiBaseUrl
+        cyrenMalwareUrlsFeedId = $cfg.parameters.cyren.value.malwareUrls.feedId
+        dcrImmutableId = $dcrCyrenMalwareImmutableId
+        dceEndpoint = $dceEndpoint
+        dcrResourceId = $dcrCyrenMalwareResourceId
+        dceResourceId = $dce.id
+    }
+    
+    $cyrenMalwareParamsJson = $cyrenMalwareParams | ConvertTo-Json -Compress
+    Write-Log "Deploying Cyren Malware Logic App with deployment name: $cyrenMalwareDeploymentName" "INFO"
+    
+    $cyrenMalwareResult = az deployment group create `
+        -g "$rg" `
+        -n "$cyrenMalwareDeploymentName" `
+        --template-file ".\infrastructure\bicep\logicapp-cyren-malware-urls.bicep" `
+        --parameters "$cyrenMalwareParamsJson" `
+        -o json
+    
+    if ($LASTEXITCODE -eq 0) {
+        Write-Log "✓ Cyren Malware Logic App deployment succeeded" "SUCCESS"
+    } else {
+        Write-Log "✗ Cyren Malware Logic App deployment failed" "ERROR"
+        Write-Log "Error details: $cyrenMalwareResult" "ERROR"
+    }
+    
+    # Final verification
+    Write-Log "`n=== Verifying Deployment ===" "INFO"
+    Start-Sleep -Seconds 30
+    
+    $logicAppsJson = az logic workflow list -g "$rg" --query "[].{name:name, state:properties.state}" -o json
+    $logicApps = $logicAppsJson | ConvertFrom-Json
+    
+    Write-Log "Found $($logicApps.Count) Logic Apps:" "INFO"
+    foreach ($app in $logicApps) {
+        Write-Log "  - $($app.name) ($($app.state))" "INFO"
+    }
+    
+    Write-Log "`n=== Deployment Complete ===" "SUCCESS"
+    Write-Log "Log file saved to: $logFile" "INFO"
+    
+} catch {
+    Write-Log "Deployment failed: $($_.Exception.Message)" "ERROR"
+    Write-Log "Stack trace: $($_.ScriptStackTrace)" "ERROR"
+    exit 1
+}

@@ -1,0 +1,314 @@
+{
+  "accessEndpoint": "https://prod-36.eastus.logic.azure.com:443/workflows/6f87fea769724312b0e194c943480e01",
+  "changedTime": "2025-11-11T16:52:43.7190747Z",
+  "createdTime": "2025-11-11T16:52:43.7299161Z",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "actions": {
+      "Calculate_From_Time": {
+        "inputs": "2025-10-26T14:00:00Z",
+        "runAfter": {
+          "Initialize_Query_Window": [
+            "Succeeded"
+          ]
+        },
+        "type": "Compose"
+      },
+      "Calculate_Until_Time": {
+        "inputs": "2025-10-26T20:00:00Z",
+        "runAfter": {
+          "Calculate_From_Time": [
+            "Succeeded"
+          ]
+        },
+        "type": "Compose"
+      },
+      "Call_TacitRed_API": {
+        "inputs": {
+          "headers": {
+            "Accept": "application/json",
+            "Authorization": "@parameters('tacitRedApiKey')",
+            "User-Agent": "LogicApp-Sentinel-TacitRed-Ingestion/1.0"
+          },
+          "method": "GET",
+          "uri": "@{parameters('tacitRedApiUrl')}/findings?from=@{outputs('Calculate_From_Time')}&until=@{outputs('Calculate_Until_Time')}&page_size=100"
+        },
+        "runAfter": {
+          "Calculate_Until_Time": [
+            "Succeeded"
+          ]
+        },
+        "type": "Http"
+      },
+      "Initialize_Query_Window": {
+        "inputs": {
+          "variables": [
+            {
+              "name": "queryWindowMinutes",
+              "type": "integer",
+              "value": 302
+            }
+          ]
+        },
+        "runAfter": {},
+        "type": "InitializeVariable"
+      },
+      "Log_Result": {
+        "inputs": {
+          "message": "TacitRed ingestion completed",
+          "recordCount": "@length(body('Call_TacitRed_API')?['results'])",
+          "status": "completed",
+          "timestamp": "@utcNow()"
+        },
+        "runAfter": {
+          "Send_to_DCE": [
+            "Succeeded"
+          ]
+        },
+        "type": "Compose"
+      },
+      "Send_to_DCE": {
+        "inputs": {
+          "authentication": {
+            "audience": "https://monitor.azure.com/",
+            "type": "ManagedServiceIdentity"
+          },
+          "body": "@body('Call_TacitRed_API')?['results']",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "method": "POST",
+          "retryPolicy": {
+            "count": 30,
+            "interval": "PT30S",
+            "maximumInterval": "PT5M",
+            "minimumInterval": "PT30S",
+            "type": "Exponential"
+          },
+          "timeout": "PT30M",
+          "uri": "@{parameters('dceEndpoint')}/dataCollectionRules/@{parameters('dcrImmutableId')}/streams/@{parameters('streamName')}?api-version=2023-01-01"
+        },
+        "runAfter": {
+          "Call_TacitRed_API": [
+            "Succeeded"
+          ]
+        },
+        "type": "Http"
+      }
+    },
+    "contentVersion": "1.0.0.0",
+    "outputs": {},
+    "parameters": {
+      "dceEndpoint": {
+        "type": "String"
+      },
+      "dcrImmutableId": {
+        "type": "String"
+      },
+      "streamName": {
+        "type": "String"
+      },
+      "tacitRedApiKey": {
+        "type": "SecureString"
+      },
+      "tacitRedApiUrl": {
+        "type": "String"
+      }
+    },
+    "triggers": {
+      "Recurrence": {
+        "evaluatedRecurrence": {
+          "frequency": "Minute",
+          "interval": 15
+        },
+        "recurrence": {
+          "frequency": "Minute",
+          "interval": 15
+        },
+        "type": "Recurrence"
+      }
+    }
+  },
+  "endpointsConfiguration": {
+    "connector": {
+      "outgoingIpAddresses": [
+        {
+          "address": "40.71.249.139"
+        },
+        {
+          "address": "40.71.249.205"
+        },
+        {
+          "address": "40.114.40.132"
+        },
+        {
+          "address": "40.71.11.80/28"
+        },
+        {
+          "address": "40.71.15.160/27"
+        },
+        {
+          "address": "52.188.157.160"
+        },
+        {
+          "address": "20.88.153.176/28"
+        },
+        {
+          "address": "20.88.153.192/27"
+        },
+        {
+          "address": "52.151.221.184"
+        },
+        {
+          "address": "52.151.221.119"
+        }
+      ]
+    },
+    "workflow": {
+      "accessEndpointIpAddresses": [
+        {
+          "address": "4.156.26.80"
+        },
+        {
+          "address": "4.156.25.14"
+        },
+        {
+          "address": "4.156.25.189"
+        },
+        {
+          "address": "20.242.168.44"
+        },
+        {
+          "address": "4.156.241.183"
+        },
+        {
+          "address": "4.156.243.174"
+        },
+        {
+          "address": "4.156.242.86"
+        },
+        {
+          "address": "4.156.243.165"
+        },
+        {
+          "address": "52.224.145.162"
+        },
+        {
+          "address": "4.156.242.96"
+        },
+        {
+          "address": "4.156.243.173"
+        },
+        {
+          "address": "4.156.241.195"
+        },
+        {
+          "address": "4.156.242.97"
+        },
+        {
+          "address": "4.156.242.26"
+        },
+        {
+          "address": "4.156.242.13"
+        },
+        {
+          "address": "172.212.37.35"
+        }
+      ],
+      "outgoingIpAddresses": [
+        {
+          "address": "52.226.216.187"
+        },
+        {
+          "address": "40.76.148.50"
+        },
+        {
+          "address": "20.84.29.18"
+        },
+        {
+          "address": "40.76.174.39"
+        },
+        {
+          "address": "4.156.27.7"
+        },
+        {
+          "address": "4.156.28.117"
+        },
+        {
+          "address": "4.156.25.188"
+        },
+        {
+          "address": "20.242.168.24"
+        },
+        {
+          "address": "4.156.241.165"
+        },
+        {
+          "address": "4.156.243.170"
+        },
+        {
+          "address": "4.156.242.49"
+        },
+        {
+          "address": "4.156.243.164"
+        },
+        {
+          "address": "52.224.145.30"
+        },
+        {
+          "address": "4.156.242.92"
+        },
+        {
+          "address": "4.156.243.172"
+        },
+        {
+          "address": "4.156.241.191"
+        },
+        {
+          "address": "4.156.241.47"
+        },
+        {
+          "address": "4.156.241.229"
+        },
+        {
+          "address": "4.156.242.12"
+        },
+        {
+          "address": "172.212.32.196"
+        }
+      ]
+    }
+  },
+  "id": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.Logic/workflows/logic-tacitred-ingestion",
+  "identity": {
+    "principalId": "02baaeb6-26fa-4477-98b8-8ee0609c3625",
+    "tenantId": "a67bbe4c-49aa-49c4-ae48-223a8986af59",
+    "type": "SystemAssigned"
+  },
+  "location": "eastus",
+  "name": "logic-tacitred-ingestion",
+  "parameters": {
+    "dceEndpoint": {
+      "value": "https://dce-sentinel-ti-5dqb.eastus-1.ingest.monitor.azure.com"
+    },
+    "dcrImmutableId": {
+      "value": "dcr-5a76cc292bd44312b97151553716d28d"
+    },
+    "streamName": {
+      "value": "Custom-TacitRed_Findings_Raw"
+    },
+    "tacitRedApiKey": {},
+    "tacitRedApiUrl": {
+      "value": "https://app.tacitred.com/api/v1"
+    }
+  },
+  "provisioningState": "Succeeded",
+  "resourceGroup": "SentinelTestStixImport",
+  "state": "Enabled",
+  "tags": {
+    "ManagedBy": "Bicep",
+    "Solution": "TacitRed-Sentinel-Integration"
+  },
+  "type": "Microsoft.Logic/workflows",
+  "version": "08584387269217835661"
+}

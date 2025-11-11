@@ -1,0 +1,20 @@
+[
+  {
+    "LogicApp": "logic-cyren-ip-reputation",
+    "DCE_Success": false,
+    "Principal": "6600d344-362f-4d5c-ac41-e1ae337125ff",
+    "DCR_Success": false
+  },
+  {
+    "LogicApp": "logic-cyren-malware-urls",
+    "DCE_Success": false,
+    "Principal": "c2cb9f78-e7d1-422a-b0aa-d75e71fcd3ab",
+    "DCR_Success": false
+  },
+  {
+    "LogicApp": "logic-tacitred-ingestion",
+    "DCE_Success": false,
+    "Principal": "4e8ba13e-30fe-4950-83d9-bbbc161930d1",
+    "DCR_Success": false
+  }
+]

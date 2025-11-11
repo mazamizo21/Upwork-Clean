@@ -1,0 +1,50 @@
+[
+  {
+    "Name": "logic-cyren-ip-reputation",
+    "Exists": false,
+    "PrincipalId": null,
+    "Dcr": null,
+    "Dce": null,
+    "RBAC": {
+      "DCR": false,
+      "DCE": false
+    },
+    "LastRun": {
+      "ErrorMessage": null,
+      "ErrorCode": null,
+      "Status": null
+    }
+  },
+  {
+    "Name": "logic-cyren-malware-urls",
+    "Exists": false,
+    "PrincipalId": null,
+    "Dcr": null,
+    "Dce": null,
+    "RBAC": {
+      "DCR": false,
+      "DCE": false
+    },
+    "LastRun": {
+      "ErrorMessage": null,
+      "ErrorCode": null,
+      "Status": null
+    }
+  },
+  {
+    "Name": "logic-tacitred-ingestion",
+    "Exists": false,
+    "PrincipalId": null,
+    "Dcr": null,
+    "Dce": null,
+    "RBAC": {
+      "DCR": false,
+      "DCE": false
+    },
+    "LastRun": {
+      "ErrorMessage": null,
+      "ErrorCode": null,
+      "Status": null
+    }
+  }
+]

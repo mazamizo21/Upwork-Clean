@@ -1,0 +1,14 @@
+CHECKING RBAC FOR ALL 3 LOGIC APPS...
+
+[logic-cyren-malware-urls]
+  DCR (): 0 RBAC assignment(s)
+  Latest Send_to_DCE: Succeeded
+
+[logic-cyren-ip-reputation]
+  DCR (): 0 RBAC assignment(s)
+  Latest Send_to_DCE: Failed
+
+[logic-tacitred-ingestion]
+  DCR (): 0 RBAC assignment(s)
+  Latest Send_to_DCE: Failed
+

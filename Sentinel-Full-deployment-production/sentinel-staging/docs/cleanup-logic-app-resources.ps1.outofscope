@@ -1,0 +1,145 @@
+# =============================================================================
+# Logic App Resource Cleanup Script
+# Removes orphaned Logic Apps and role assignments before redeployment
+# =============================================================================
+
+param(
+    [string]$ConfigFile = ".\client-config-COMPLETE.json",
+    [switch]$Force = $false
+)
+
+# Initialize logging
+$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$logDir = ".\docs\cleanup-logs"
+$logFile = "$logDir\logic-app-cleanup-$timestamp.log"
+
+# Create log directory if it doesn't exist
+if (-not (Test-Path $logDir)) {
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+}
+
+function Write-Log {
+    param([string]$Message, [string]$Level = "INFO")
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "[$timestamp] [$Level] $Message"
+    Write-Host $logEntry -ForegroundColor $(
+        switch ($Level) {
+            "ERROR" { "Red" }
+            "WARN" { "Yellow" }
+            "SUCCESS" { "Green" }
+            default { "White" }
+        }
+    )
+    Add-Content -Path $logFile -Value $logEntry
+}
+
+try {
+    Write-Log "Starting Logic App resource cleanup..." "INFO"
+    
+    # Load configuration
+    if (-not (Test-Path $ConfigFile)) {
+        throw "Configuration file not found: $ConfigFile"
+    }
+    
+    $cfg = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+    $sub = $cfg.parameters.azure.value.subscriptionId
+    $rg = $cfg.parameters.azure.value.resourceGroupName
+    
+    Write-Log "Using subscription: $sub" "INFO"
+    Write-Log "Using resource group: $rg" "INFO"
+    
+    # Set Azure context
+    az account set --subscription "$sub" | Out-Null
+    Write-Log "Azure context set successfully" "SUCCESS"
+    
+    if (-not $Force) {
+        $confirmation = Read-Host "This will delete ALL Logic Apps and orphaned role assignments in RG '$rg'. Continue? (y/N)"
+        if ($confirmation -ne "y" -and $confirmation -ne "Y") {
+            Write-Log "Cleanup cancelled by user" "WARN"
+            exit 0
+        }
+    }
+    
+    # Step 1: Get and delete existing Logic Apps
+    Write-Log "`n=== Step 1: Removing existing Logic Apps ===" "INFO"
+    $logicAppsJson = az logic workflow list -g "$rg" --query "[].{name:name, id:id}" -o json
+    $logicApps = $logicAppsJson | ConvertFrom-Json
+    
+    if ($logicApps -and $logicApps.Count -gt 0) {
+        Write-Log "Found $($logicApps.Count) Logic Apps to remove" "INFO"
+        foreach ($app in $logicApps) {
+            Write-Log "Deleting Logic App: $($app.name)" "INFO"
+            try {
+                az logic workflow delete -g "$rg" --name "$($app.name)" --yes | Out-Null
+                Write-Log "✓ Deleted: $($app.name)" "SUCCESS"
+            } catch {
+                Write-Log "✗ Failed to delete $($app.name): $($_.Exception.Message)" "ERROR"
+            }
+        }
+    } else {
+        Write-Log "No Logic Apps found" "INFO"
+    }
+    
+    # Step 2: Remove orphaned role assignments
+    Write-Log "`n=== Step 2: Removing orphaned role assignments ===" "INFO"
+    $roleAssignmentsJson = az role assignment list --resource-group "$rg" --query "[?contains(roleDefinitionId, '3913510d-42f4-4e42-8a64-420c390055eb')].{name:name, principalId:principalId, principalName:principalName}" -o json
+    $roleAssignments = $roleAssignmentsJson | ConvertFrom-Json
+    
+    if ($roleAssignments -and $roleAssignments.Count -gt 0) {
+        Write-Log "Found $($roleAssignments.Count) Monitoring Metrics Publisher role assignments to review" "INFO"
+        foreach ($assignment in $roleAssignments) {
+            # Check if principal still exists
+            $principalExists = $false
+            try {
+                $principalCheck = az ad sp show --id "$($assignment.principalId)" -o json 2>$null
+                if ($principalCheck) {
+                    $principalExists = $true
+                }
+            } catch {
+                $principalExists = $false
+            }
+            
+            if (-not $principalExists) {
+                Write-Log "Removing orphaned role assignment: $($assignment.name) (principal: $($assignment.principalName))" "INFO"
+                try {
+                    az role assignment delete --ids "$($assignment.name)" | Out-Null
+                    Write-Log "✓ Deleted orphaned assignment: $($assignment.name)" "SUCCESS"
+                } catch {
+                    Write-Log "✗ Failed to delete assignment $($assignment.name): $($_.Exception.Message)" "ERROR"
+                }
+            } else {
+                Write-Log "Keeping valid assignment: $($assignment.name) (principal: $($assignment.principalName))" "INFO"
+            }
+        }
+    } else {
+        Write-Log "No Monitoring Metrics Publisher role assignments found" "INFO"
+    }
+    
+    # Step 3: Wait for cleanup to complete
+    Write-Log "`n=== Step 3: Waiting for cleanup propagation ===" "INFO"
+    Write-Log "Waiting 60 seconds for Azure to process deletions..." "INFO"
+    Start-Sleep -Seconds 60
+    
+    # Step 4: Verify cleanup
+    Write-Log "`n=== Step 4: Verifying cleanup ===" "INFO"
+    $remainingAppsJson = az logic workflow list -g "$rg" --query "[].{name:name}" -o json
+    $remainingApps = $remainingAppsJson | ConvertFrom-Json
+    
+    if ($remainingApps -and $remainingApps.Count -gt 0) {
+        Write-Log "⚠ $($remainingApps.Count) Logic Apps still remain:" "WARN"
+        foreach ($app in $remainingApps) {
+            Write-Log "  - $($app.name)" "WARN"
+        }
+    } else {
+        Write-Log "✓ All Logic Apps successfully removed" "SUCCESS"
+    }
+    
+    Write-Log "`n=== Cleanup Complete ===" "SUCCESS"
+    Write-Log "Resource group '$rg' is ready for fresh Logic App deployment" "SUCCESS"
+    Write-Log "Log file saved to: $logFile" "INFO"
+    
+} catch {
+    Write-Log "Cleanup failed: $($_.Exception.Message)" "ERROR"
+    Write-Log "Stack trace: $($_.ScriptStackTrace)" "ERROR"
+    exit 1
+}

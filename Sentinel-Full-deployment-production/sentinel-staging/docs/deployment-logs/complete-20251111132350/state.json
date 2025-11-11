@@ -1,0 +1,8 @@
+{
+  "dce": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.Insights/dataCollectionEndpoints/dce-sentinel-ti",
+  "ipDcr": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.Insights/dataCollectionRules/dcr-cyren-ip",
+  "tacitredDcr": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.Insights/dataCollectionRules/dcr-tacitred-findings",
+  "dur": 18.471968203333333,
+  "malDcr": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.Insights/dataCollectionRules/dcr-cyren-malware",
+  "ts": "20251111132350"
+}

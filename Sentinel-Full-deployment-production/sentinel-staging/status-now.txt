@@ -1,0 +1,14 @@
+STATUS CHECK - 09:38:50
+
+[logic-cyren-malware-urls]
+  DCR RBAC: 0 assignment(s)
+  Latest Send_to_DCE: Succeeded
+
+[logic-cyren-ip-reputation]
+  DCR RBAC: 0 assignment(s)
+  Latest Send_to_DCE: Failed
+
+[logic-tacitred-ingestion]
+  DCR RBAC: 0 assignment(s)
+  Latest Send_to_DCE: Failed
+

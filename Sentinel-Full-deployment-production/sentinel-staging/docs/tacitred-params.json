@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "logicAppName": {
+      "value": "logic-tacitred-ingestion"
+    },
+    "location": {
+      "value": "eastus"
+    },
+    "tacitRedApiKey": {
+      "value": "a2be534e-6231-4fb0-b8b8-15dbc96e83b7"
+    },
+    "tacitRedApiUrl": {
+      "value": "https://api.tacitred.com/v1"
+    },
+    "dcrImmutableId": {
+      "value": "dcr-tacitred-findings-d5f3c5d5a9e4e8f9c2e5c8e5b5e5c6-2"
+    },
+    "dceEndpoint": {
+      "value": "https://dce-sentinel-threatintel.eastus-1.ingest.monitor.azure.com"
+    },
+    "dcrResourceId": {
+      "value": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.Insights/dataCollectionRules/dcr-tacitred-findings"
+    },
+    "dceResourceId": {
+      "value": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.Insights/dataCollectionEndpoints/dce-sentinel-threatintel"
+    }
+  }
+}

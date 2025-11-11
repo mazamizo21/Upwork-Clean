@@ -1,0 +1,26 @@
+{
+  "Tables": [
+    {
+      "Healthy": false,
+      "RowCount": 0,
+      "Table": "Cyren_Indicators_CL"
+    },
+    {
+      "Healthy": false,
+      "RowCount": 0,
+      "Table": "TacitRed_Findings_CL"
+    }
+  ],
+  "LogicApps": [
+    {
+      "DCR_RBAC": false,
+      "DCE_RBAC": false,
+      "Error": "None",
+      "Healthy": false,
+      "LastRunStatus": "Failed",
+      "Name": "logic-tacitred-ingestion"
+    }
+  ],
+  "Timestamp": "2025-11-11 11:09:44",
+  "OverallStatus": "Incomplete"
+}

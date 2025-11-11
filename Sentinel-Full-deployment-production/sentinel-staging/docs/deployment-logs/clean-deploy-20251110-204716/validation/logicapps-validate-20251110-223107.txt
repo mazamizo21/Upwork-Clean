@@ -1,0 +1,11 @@
+ TRIGGER AND VALIDATE LOGIC APPS 
+RG=SentinelTestStixImport WS=SentinelTestStixImportInstance (29372834-8f23-4eb3-86b6-476f7897fbf8) SUB=774bee0e-b281-4f70-8e40-199e35b65117
+Triggered: logicapp-cyren-ip-reputation
+Triggered: logicapp-cyren-malware-urls
+Triggered: logic-tacitred-ingestion
+\nLatest run statuses:
+logicapp-cyren-ip-reputation: no runs
+logicapp-cyren-malware-urls: no runs
+logic-tacitred-ingestion: Failed @ 11/11/2025 3:31:22 AM
+  Send_to_DCE: Failed code= msg=
+\nIngestion validation (last 10m):

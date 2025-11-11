@@ -1,0 +1,200 @@
+{
+  "accessEndpoint": "https://prod-11.eastus.logic.azure.com:443/workflows/3002b9dcfb6d4bef90dcca56743e2eca",
+  "changedTime": "2025-11-11T17:04:48.450821Z",
+  "createdTime": "2025-11-11T17:04:48.464037Z",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "actions": {},
+    "contentVersion": "1.0.0.0",
+    "outputs": {},
+    "parameters": {
+      "testDce": {
+        "type": "String"
+      },
+      "testDcr": {
+        "type": "String"
+      },
+      "testKey": {
+        "type": "SecureString"
+      }
+    },
+    "triggers": {
+      "manual": {
+        "kind": "Http",
+        "type": "Request"
+      }
+    }
+  },
+  "endpointsConfiguration": {
+    "connector": {
+      "outgoingIpAddresses": [
+        {
+          "address": "40.71.249.139"
+        },
+        {
+          "address": "40.71.249.205"
+        },
+        {
+          "address": "40.114.40.132"
+        },
+        {
+          "address": "40.71.11.80/28"
+        },
+        {
+          "address": "40.71.15.160/27"
+        },
+        {
+          "address": "52.188.157.160"
+        },
+        {
+          "address": "20.88.153.176/28"
+        },
+        {
+          "address": "20.88.153.192/27"
+        },
+        {
+          "address": "52.151.221.184"
+        },
+        {
+          "address": "52.151.221.119"
+        }
+      ]
+    },
+    "workflow": {
+      "accessEndpointIpAddresses": [
+        {
+          "address": "4.156.26.80"
+        },
+        {
+          "address": "4.156.25.14"
+        },
+        {
+          "address": "4.156.25.189"
+        },
+        {
+          "address": "20.242.168.44"
+        },
+        {
+          "address": "4.156.241.183"
+        },
+        {
+          "address": "4.156.243.174"
+        },
+        {
+          "address": "4.156.242.86"
+        },
+        {
+          "address": "4.156.243.165"
+        },
+        {
+          "address": "52.224.145.162"
+        },
+        {
+          "address": "4.156.242.96"
+        },
+        {
+          "address": "4.156.243.173"
+        },
+        {
+          "address": "4.156.241.195"
+        },
+        {
+          "address": "4.156.242.97"
+        },
+        {
+          "address": "4.156.242.26"
+        },
+        {
+          "address": "4.156.242.13"
+        },
+        {
+          "address": "172.212.37.35"
+        }
+      ],
+      "outgoingIpAddresses": [
+        {
+          "address": "52.226.216.187"
+        },
+        {
+          "address": "40.76.148.50"
+        },
+        {
+          "address": "20.84.29.18"
+        },
+        {
+          "address": "40.76.174.39"
+        },
+        {
+          "address": "4.156.27.7"
+        },
+        {
+          "address": "4.156.28.117"
+        },
+        {
+          "address": "4.156.25.188"
+        },
+        {
+          "address": "20.242.168.24"
+        },
+        {
+          "address": "4.156.241.165"
+        },
+        {
+          "address": "4.156.243.170"
+        },
+        {
+          "address": "4.156.242.49"
+        },
+        {
+          "address": "4.156.243.164"
+        },
+        {
+          "address": "52.224.145.30"
+        },
+        {
+          "address": "4.156.242.92"
+        },
+        {
+          "address": "4.156.243.172"
+        },
+        {
+          "address": "4.156.241.191"
+        },
+        {
+          "address": "4.156.241.47"
+        },
+        {
+          "address": "4.156.241.229"
+        },
+        {
+          "address": "4.156.242.12"
+        },
+        {
+          "address": "172.212.32.196"
+        }
+      ]
+    }
+  },
+  "id": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.Logic/workflows/logic-test-params",
+  "identity": {
+    "principalId": "0a99663f-ae46-402e-8ead-a581e2601dc3",
+    "tenantId": "a67bbe4c-49aa-49c4-ae48-223a8986af59",
+    "type": "SystemAssigned"
+  },
+  "location": "eastus",
+  "name": "logic-test-params",
+  "parameters": {
+    "testDce": {
+      "value": "https://dce-sentinel-ti-5dqb.eastus-1.ingest.monitor.azure.com"
+    },
+    "testDcr": {
+      "value": "dcr-5a76cc292bd44312b97151553716d28d"
+    },
+    "testKey": {}
+  },
+  "provisioningState": "Succeeded",
+  "resourceGroup": "SentinelTestStixImport",
+  "state": "Enabled",
+  "type": "Microsoft.Logic/workflows",
+  "version": "08584387261970390179"
+}

@@ -1,0 +1,8 @@
+ ACTION DIAGNOSTICS (Send_to_DCE) 
+logic-cyren-ip-reputation: Run=08584387748658374017168509512CU86 Status=Failed Start=11/11/2025 3:33:39 AM
+  Send_to_DCE: Status=Failed Code= Msg=
+  Outputs: null
+logic-cyren-malware-urls: Run=08584387748632023747692540378CU73 Status=Running Start=11/11/2025 3:33:42 AM
+logic-tacitred-ingestion: Run=08584387745492922259599556355CU45 Status=Failed Start=11/11/2025 3:38:56 AM
+  Send_to_DCE: Status=Failed Code= Msg=
+  Outputs: null

@@ -105,6 +105,11 @@
             "bicepFile": "workbook-ciso-correlation.bicep",
             "enabled": false,
             "note": "Disabled - bicep file does not exist"
+          },
+          {
+            "name": "Cyren Threat Intelligence",
+            "bicepFile": "workbook-cyren-threat-intelligence.bicep",
+            "enabled": true
           }
         ]
       }

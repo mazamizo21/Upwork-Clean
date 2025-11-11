@@ -1,0 +1,20 @@
+======================================================================
+LOGIC APP STATUS CHECK - 2025-11-11 09:29:05
+======================================================================
+
+[logic-cyren-malware-urls]
+  DCR RBAC (): 0 assignment(s)
+  DCE RBAC (dce-sentinel-ti): 1 assignment(s)
+  Recent Runs (last 3):
+    [2025-11-11 14:21:04] Send_to_DCE: Succeeded
+      HTTP Status: 
+    [2025-11-11 13:02:12] Send_to_DCE: Succeeded
+      HTTP Status: 
+    [2025-11-11 07:13:21] Send_to_DCE: Failed
+    [2025-11-11 07:10:41] Send_to_DCE: Failed
+    [2025-11-11 07:05:58] Send_to_DCE: Failed
+    [2025-11-11 07:02:12] Send_to_DCE: Failed
+
+[logic-cyren-ip-reputation]
+
+======================================================================

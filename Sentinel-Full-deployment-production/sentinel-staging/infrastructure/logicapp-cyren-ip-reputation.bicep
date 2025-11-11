@@ -25,14 +25,28 @@ param dcrImmutableId string
 @description('DCE Ingestion Endpoint')
 param dceEndpoint string
 
+@description('DCR resource ID for RBAC assignment')
+param dcrResourceId string
+
+@description('DCE resource ID for RBAC assignment')
+param dceResourceId string
+
+ 
+
 @description('Stream name for ingestion')
 param streamName string = 'Custom-Cyren_IpReputation_Raw'
 
 @description('Fetch count per request')
-param fetchCount int = 10000
+param fetchCount int = 500
 
 @description('Polling interval in hours')
 param pollingIntervalHours int = 6
+
+@description('Start date for data filter (YYYY-MM-DD)')
+param startDate string = '2024-10-26'
+
+@description('End date for data filter (YYYY-MM-DD)')
+param endDate string = '2024-10-27'
 
 // Logic App with managed identity
 resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
@@ -49,24 +63,39 @@ resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
       parameters: {
         cyrenToken: {
           type: 'securestring'
+          defaultValue: cyrenIpReputationToken
         }
         cyrenApiUrl: {
           type: 'string'
+          defaultValue: cyrenApiBaseUrl
         }
         feedId: {
           type: 'string'
+          defaultValue: cyrenIpReputationFeedId
         }
         fetchCount: {
           type: 'int'
+          defaultValue: fetchCount
         }
         dcrImmutableId: {
           type: 'string'
+          defaultValue: dcrImmutableId
         }
         dceEndpoint: {
           type: 'string'
+          defaultValue: dceEndpoint
         }
         streamName: {
           type: 'string'
+          defaultValue: streamName
+        }
+        startDate: {
+          type: 'string'
+          defaultValue: startDate
+        }
+        endDate: {
+          type: 'string'
+          defaultValue: endDate
         }
       }
       triggers: {
@@ -113,7 +142,7 @@ resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
           type: 'Http'
           inputs: {
             method: 'GET'
-            uri: '@{parameters(\'cyrenApiUrl\')}?feedId=@{parameters(\'feedId\')}&offset=@{variables(\'offset\')}&count=@{parameters(\'fetchCount\')}&format=jsonl'
+            uri: '@{parameters(\'cyrenApiUrl\')}?feedId=@{parameters(\'feedId\')}&offset=@{variables(\'offset\')}&count=@{parameters(\'fetchCount\')}&format=jsonl&from=@{parameters(\'startDate\')}&to=@{parameters(\'endDate\')}'
             headers: {
               Authorization: 'Bearer @{parameters(\'cyrenToken\')}'
             }
@@ -196,6 +225,14 @@ resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
               type: 'ManagedServiceIdentity'
               audience: 'https://monitor.azure.com/'
             }
+            retryPolicy: {
+              type: 'Exponential'
+              interval: 'PT30S'
+              minimumInterval: 'PT30S'
+              maximumInterval: 'PT5M'
+              count: 30
+            }
+            timeout: 'PT30M'
           }
           runAfter: {
             For_Each_Line: [
@@ -206,32 +243,43 @@ resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
       }
       outputs: {}
     }
-    parameters: {
-      cyrenToken: {
-        value: cyrenIpReputationToken
-      }
-      cyrenApiUrl: {
-        value: cyrenApiBaseUrl
-      }
-      feedId: {
-        value: cyrenIpReputationFeedId
-      }
-      fetchCount: {
-        value: fetchCount
-      }
-      dcrImmutableId: {
-        value: dcrImmutableId
-      }
-      dceEndpoint: {
-        value: dceEndpoint
-      }
-      streamName: {
-        value: streamName
-      }
-    }
   }
 }
 
 output logicAppId string = logicApp.id
 output logicAppName string = logicApp.name
 output principalId string = logicApp.identity.principalId
+
+resource dcr 'Microsoft.Insights/dataCollectionRules@2022-06-01' existing = {
+  name: last(split(dcrResourceId, '/'))
+}
+
+resource dce 'Microsoft.Insights/dataCollectionEndpoints@2022-06-01' existing = {
+  name: last(split(dceResourceId, '/'))
+}
+
+resource roleAssignmentDcr 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(dcr.id, logicApp.id, '3913510d-42f4-4e42-8a64-420c390055eb')
+  scope: dcr
+  properties: {
+    principalId: logicApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')
+  }
+  dependsOn: [
+    logicApp
+  ]
+}
+
+resource roleAssignmentDce 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(dce.id, logicApp.id, '3913510d-42f4-4e42-8a64-420c390055eb')
+  scope: dce
+  properties: {
+    principalId: logicApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')
+  }
+  dependsOn: [
+    logicApp
+  ]
+}

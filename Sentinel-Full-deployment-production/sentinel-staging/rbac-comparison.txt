@@ -1,0 +1,21 @@
+======================================================================
+RBAC COMPARISON - WORKING vs FAILING
+======================================================================
+
+MALWARE APP (WORKING): e9268d59-9029-4d85-8e83-37cd38e237b2
+  Total roles: 2
+    - Monitoring Metrics Publisher on dcr-cyren-malware
+    - Monitoring Metrics Publisher on dce-sentinel-ti
+
+IP REPUTATION APP (FAILING): 145ef535-80a6-45f4-9ea9-a6e5fcf4e2ed
+  Total roles: 1
+    - Monitoring Metrics Publisher on dce-sentinel-ti
+
+TACITRED APP (FAILING): e3a4fd29-7328-4f5b-8998-1fef10dcc5f9
+  Total roles: 1
+    - Monitoring Metrics Publisher on dce-sentinel-ti
+
+======================================================================
+ANALYSIS:
+Malware has 2 roles, IP Rep has 1, TacitRed has 1
+======================================================================

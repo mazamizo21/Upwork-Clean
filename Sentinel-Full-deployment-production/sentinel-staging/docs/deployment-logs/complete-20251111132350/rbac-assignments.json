@@ -1,0 +1,14 @@
+[
+  {
+    "DCR_Success": false,
+    "LogicApp": "logic-cyren-malware-urls",
+    "DCE_Success": false,
+    "Principal": "ad021a2a-20f9-452b-85c1-2c275f6b8c0a"
+  },
+  {
+    "DCR_Success": false,
+    "LogicApp": "logic-tacitred-ingestion",
+    "DCE_Success": false,
+    "Principal": "8e400e66-f2a6-4012-b637-c8b4fc050fd6"
+  }
+]

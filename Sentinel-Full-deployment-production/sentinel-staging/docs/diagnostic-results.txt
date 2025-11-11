@@ -1,0 +1,20 @@
+============================================================
+LOGIC APP DIAGNOSTIC - 2025-11-11 02:33:45
+============================================================
+
+[logic-cyren-ip-reputation]
+  Send_to_DCE Status: Failed
+  DCR RBAC: 0 assignment(s)
+  DCE RBAC: 1 assignment(s)
+
+[logic-cyren-malware-urls]
+  Send_to_DCE Status: Failed
+  DCR RBAC: 0 assignment(s)
+  DCE RBAC: 1 assignment(s)
+
+[logic-tacitred-ingestion]
+  Send_to_DCE Status: Failed
+  DCR RBAC: 0 assignment(s)
+  DCE RBAC: 1 assignment(s)
+
+============================================================
