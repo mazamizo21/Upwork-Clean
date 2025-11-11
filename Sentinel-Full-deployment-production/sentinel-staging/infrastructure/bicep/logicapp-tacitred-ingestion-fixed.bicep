@@ -1,6 +1,7 @@
 // =============================================================================
-// Logic App - TacitRed Data Ingestion to Sentinel
+// Logic App - TacitRed Data Ingestion to Sentinel (FIXED VERSION)
 // Polls TacitRed API and sends data to DCE using Logs Ingestion API
+// Includes reliable RBAC assignments
 // =============================================================================
 
 @description('Logic App name')
@@ -28,15 +29,13 @@ param dcrResourceId string
 @description('DCE resource ID for RBAC assignment')
 param dceResourceId string
 
- 
-
 @description('Stream name for ingestion')
 param streamName string = 'Custom-TacitRed_Findings_Raw'
 
 @description('Polling interval in minutes')
 param pollingIntervalMinutes int = 15
 
-@description('Tags for the resource')
+@description('Tags for resource')
 param tags object = {
   Solution: 'TacitRed-Sentinel-Integration'
   ManagedBy: 'Bicep'
@@ -188,10 +187,29 @@ output logicAppName string = logicApp.name
 output principalId string = logicApp.identity.principalId
 output identityType string = logicApp.identity.type
 
-// RBAC Role Assignments - Using tenant-level deployment for proper scoping
-// Monitoring Metrics Publisher role ID
-var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
+// FIXED RBAC ASSIGNMENTS - Using direct resource references instead of existing keyword
+resource roleAssignmentDcr 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(dcrResourceId, logicApp.id, '3913510d-42f4-4e42-8a64-420c390055eb')
+  scope: dcrResourceId
+  properties: {
+    principalId: logicApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')
+  }
+  dependsOn: [
+    logicApp
+  ]
+}
 
-// Deploy role assignments using az CLI in the deployment script instead
-// Bicep has limitations with cross-resource-group role assignments
-// The DEPLOY-COMPLETE.ps1 script will handle RBAC after Logic App deployment
+resource roleAssignmentDce 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(dceResourceId, logicApp.id, '3913510d-42f4-4e42-8a64-420c390055eb')
+  scope: dceResourceId
+  properties: {
+    principalId: logicApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')
+  }
+  dependsOn: [
+    logicApp
+  ]
+}
