@@ -1,0 +1,12 @@
+logic-cyren-ip-reputation
+  Status: Succeeded
+  RunId: 08584388060786557662764069906CU34
+
+logic-cyren-malware-urls
+  Status: Running
+  RunId: 08584388060759056114105689841CU86
+
+logic-tacitred-ingestion
+  Status: Succeeded
+  RunId: 08584388060730246602108508620CU60
+

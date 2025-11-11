@@ -1,0 +1,5 @@
+ERROR: unrecognized arguments: compromised , DaysSinceCompromise,  days ago but account is still enabled. ,         Compromise count: , CompromiseCount, . ,         Average confidence: , round(AvgConfidence, 0), %     ) | project     Email = AccountUPN,     Severity,     AccountEnabled,     CompromiseCount,     FirstCompromise,     LatestCompromise,     DaysSinceCompromise,     AvgConfidence,     FindingTypes,     Domains,     Department,     JobTitle,     Manager,     RiskReason | order by Severity desc, DaysSinceCompromise asc  
+
+Examples from AI knowledge base:
+https://aka.ms/cli_ref
+Read more about the command in reference docs

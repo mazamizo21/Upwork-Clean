@@ -1,0 +1,1 @@
+ERROR: Bad Request({"error":{"message":"The request had some invalid properties","code":"BadArgumentError","correlationId":"29af726c-a7e2-4a81-9d0e-ea66f683c120","innererror":{"code":"SemanticError","message":"A semantic error occurred.","innererror":{"code":"SEM0100","message":"'project' operator: Failed to resolve scalar expression named 'AffectedUsers'"}}}})

@@ -1,0 +1,94 @@
+// VELOCITY & ACCELERATION METRICS
+// Innovation: Physics-inspired threat momentum analysis
+// Measures: Velocity (rate of change), Acceleration (rate of rate of change), Jerk (rate of acceleration)
+
+let binSize = 1h;
+let velocityWindow = {TimeRange:start} .. {TimeRange:end};
+
+// === CYREN VELOCITY ===
+let CyrenVelocity = Cyren_MalwareUrls_CL
+| where TimeGenerated {TimeRange}
+| summarize Count = count() by bin(TimeGenerated, binSize)
+| extend Source = "Cyren"
+| order by TimeGenerated asc;
+
+// === TACITRED VELOCITY ===
+let TacitRedVelocity = TacitRed_Findings_CL
+| where TimeGenerated {TimeRange}
+| summarize Count = count() by bin(TimeGenerated, binSize)
+| extend Source = "TacitRed"
+| order by TimeGenerated asc;
+
+// === COMBINE AND CALCULATE DERIVATIVES ===
+union CyrenVelocity, TacitRedVelocity
+| partition by Source (
+    order by TimeGenerated asc
+    | extend 
+        // Previous values for calculations
+        PrevCount = prev(Count, 1),
+        PrevCount2 = prev(Count, 2),
+        PrevCount3 = prev(Count, 3),
+        
+        // === VELOCITY (First Derivative) ===
+        // Δ threats per hour
+        Velocity = Count - prev(Count, 1),
+        
+        // === ACCELERATION (Second Derivative) ===
+        // Rate of change of velocity
+        Acceleration = (Count - prev(Count, 1)) - prev((Count - prev(Count, 1)), 1),
+        
+        // === JERK (Third Derivative) ===
+        // Rate of change of acceleration - detects sudden surges
+        Jerk = ((Count - prev(Count, 1)) - prev((Count - prev(Count, 1)), 1)) - 
+               prev(((Count - prev(Count, 1)) - prev((Count - prev(Count, 1)), 1)), 1)
+    | extend 
+        // Percentage changes
+        VelocityPct = case(
+            PrevCount > 0, round((todouble(Velocity) / todouble(PrevCount)) * 100.0, 2),
+            0.0
+        ),
+        
+        // === MOMENTUM SCORE ===
+        // Innovation: Composite momentum indicator
+        MomentumScore = case(
+            // Positive acceleration AND positive velocity = Strong growth
+            Acceleration > 0 and Velocity > 0, 
+                round(todouble(Velocity) * 1.5 + todouble(Acceleration) * 2.0, 2),
+            // Positive velocity but negative acceleration = Slowing growth
+            Velocity > 0 and Acceleration < 0,
+                round(todouble(Velocity) * 0.8, 2),
+            // Negative velocity = Declining
+            Velocity < 0,
+                todouble(Velocity),
+            0.0
+        ),
+        
+        // === THREAT PRESSURE INDICATOR ===
+        // Innovation: Weighted pressure metric
+        ThreatPressure = case(
+            Jerk > 5, "🔴 Explosive Growth",      // Sudden surge
+            Acceleration > 10, "🟠 Rapid Growth", // Fast acceleration
+            Velocity > 20, "🟡 Steady Growth",    // High velocity
+            Velocity > 0, "🟢 Normal Growth",     // Positive velocity
+            "⚪ Declining"                         // Negative or zero
+        ),
+        
+        // === ANOMALY FLAGS ===
+        IsVelocityAnomaly = abs(Velocity) > 50,
+        IsAccelerationAnomaly = abs(Acceleration) > 20,
+        IsJerkAnomaly = abs(Jerk) > 10
+)
+| project 
+    TimeGenerated,
+    Source,
+    ThreatCount = Count,
+    Velocity,
+    Acceleration,
+    Jerk,
+    VelocityPct,
+    MomentumScore,
+    ThreatPressure,
+    IsVelocityAnomaly,
+    IsAccelerationAnomaly,
+    IsJerkAnomaly
+| order by TimeGenerated desc

@@ -1,0 +1,56 @@
+// DCR Transformation for TacitRed Findings
+// Maps TacitRed API JSON response to TacitRed_Findings_CL table schema
+// API returns nested structure: finding.supporting_data contains the actual data
+
+source
+// Parse the nested finding object
+| extend findingObj = parse_json(tostring(columnifexists('finding', '{}')))
+| extend supportingData = parse_json(tostring(findingObj['supporting_data']))
+
+// Extract fields from supporting_data
+| extend email_s = tostring(supportingData['credential'])
+| extend domain_s = tostring(supportingData['domain'])
+| extend findingType_s = tostring(findingObj['types'][0])
+| extend notes_s = tostring(findingObj['title'])
+
+// Extract timestamps
+| extend detection_ts_t = todatetime(columnifexists('time', ''))
+| extend firstSeen_t = todatetime(supportingData['date_compromised'])
+| extend lastSeen_t = todatetime(supportingData['date_compromised'])
+
+// Extract severity and other top-level fields
+| extend severity_s = tostring(columnifexists('severity', ''))
+| extend status_s = tostring(columnifexists('state_id', ''))
+
+// Extract machine/user info
+| extend username_s = tostring(supportingData['machine_name'])
+| extend user_id_s = tostring(supportingData['machine_id'])
+
+// Store full finding as metadata
+| extend metadata_s = tostring(findingObj)
+
+// Extract additional context
+| extend campaign_id_s = tostring(findingObj['uid'])
+| extend confidence_d = toint(columnifexists('severity_id', 0))
+
+// Add source identifier
+| extend source_s = 'TacitRed'
+
+// Project final schema matching TacitRed_Findings_CL table
+| project 
+    TimeGenerated = now(),
+    email_s,
+    domain_s,
+    findingType_s,
+    confidence_d,
+    firstSeen_t,
+    lastSeen_t,
+    detection_ts_t,
+    notes_s,
+    severity_s,
+    status_s,
+    campaign_id_s,
+    user_id_s,
+    username_s,
+    metadata_s,
+    source_s

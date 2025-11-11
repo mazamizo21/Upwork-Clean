@@ -1,0 +1,9 @@
+{
+  "CustomerId": "29372834-8f23-4eb3-86b6-476f7897fbf8",
+  "ProvisioningState": "Succeeded",
+  "Location": "eastus",
+  "ResourceId": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.OperationalInsights/workspaces/SentinelTestStixImportInstance",
+  "Sku": "pergb2018",
+  "ResourceGroupName": "sentinelteststiximport",
+  "Name": "SentinelTestStixImportInstance"
+}

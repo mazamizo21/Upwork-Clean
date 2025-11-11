@@ -1,0 +1,12 @@
+logic-cyren-ip-reputation
+  DCE: 
+  DCR: 
+
+logic-cyren-malware-urls
+  DCE: 
+  DCR: 
+
+logic-tacitred-ingestion
+  DCE: 
+  DCR: 
+

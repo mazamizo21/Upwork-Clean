@@ -1,0 +1,66 @@
+{
+  "tables": [
+    {
+      "columns": [
+        {
+          "name": "Domain",
+          "type": "string"
+        },
+        {
+          "name": "Severity",
+          "type": "string"
+        },
+        {
+          "name": "CompromisedUsers",
+          "type": "dynamic"
+        },
+        {
+          "name": "UserCount",
+          "type": "long"
+        },
+        {
+          "name": "LatestCompromise",
+          "type": "datetime"
+        },
+        {
+          "name": "MaliciousIOCs",
+          "type": "dynamic"
+        },
+        {
+          "name": "IOCTypes",
+          "type": "dynamic"
+        },
+        {
+          "name": "Categories",
+          "type": "dynamic"
+        },
+        {
+          "name": "MaxRiskScore",
+          "type": "int"
+        },
+        {
+          "name": "AvgConfidence",
+          "type": "real"
+        },
+        {
+          "name": "FindingTypes",
+          "type": "dynamic"
+        },
+        {
+          "name": "ThreatDescription",
+          "type": "string"
+        },
+        {
+          "name": "CyrenFirstSeen",
+          "type": "datetime"
+        },
+        {
+          "name": "CyrenLastSeen",
+          "type": "datetime"
+        }
+      ],
+      "name": "PrimaryResult",
+      "rows": []
+    }
+  ]
+}

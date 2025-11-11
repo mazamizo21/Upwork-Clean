@@ -1,0 +1,1 @@
+ERROR: Bad Request({"error":{"message":"The request had some invalid properties","code":"BadArgumentError","correlationId":"44959e43-db9a-4dfb-8d4a-616da40ec9ac","innererror":{"code":"SemanticError","message":"A semantic error occurred.","innererror":{"code":"SEM0100","message":"'where' operator: Failed to resolve table or column expression named 'IdentityInfo'"}}}})

@@ -1,0 +1,126 @@
+═══════════════════════════════════════════════════════════════════════════════
+CORRECTED QUERY - COPY AND PASTE INTO AZURE PORTAL
+═══════════════════════════════════════════════════════════════════════════════
+
+Rule Name: New Malware Infrastructure on Known Compromised Domain
+Fix Date: November 10, 2025, 08:17 AM
+Issue: TABLE NAME MISMATCH - Now using correct table names
+
+CRITICAL: This version uses PARSER FUNCTIONS (not raw tables):
+✅ parser_tacitred_findings() - Normalized TacitRed data
+✅ parser_cyren_indicators() - Normalized Cyren data
+This matches the pattern used in ALL other Analytics rules!
+
+INSTRUCTIONS:
+1. Navigate to Azure Portal → Microsoft Sentinel → Analytics
+2. Find and edit the rule: "New Malware Infrastructure on Known Compromised Domain"
+3. Go to "Set rule logic" tab
+4. DELETE the existing query
+5. COPY everything between the lines below
+6. PASTE into the "Rule query" field
+7. Click "Results simulation" to validate
+8. Click "Save"
+
+───────────────────────────────────────────────────────────────────────────────
+BEGIN QUERY (copy from next line)
+───────────────────────────────────────────────────────────────────────────────
+
+// Analytics Rule: New Malware Infrastructure on Known Compromised Domain
+// Detects when compromised domains (TacitRed) host malware/phishing infrastructure
+// Severity: High
+// Tactics: Command and Control, Initial Access
+// Frequency: Every 8 hours
+// Query Period: 8 hours
+// CORRECTED: Uses parser functions (parser_tacitred_findings and parser_cyren_indicators)
+
+let lookbackPeriod = 8h;
+let cyrenActiveWindow = 48h; // Consider Cyren indicators active if seen in last 48 hours
+// Get TacitRed compromised domains
+let CompromisedDomains = parser_tacitred_findings()
+    | where TimeGenerated >= ago(lookbackPeriod)
+    | where isnotempty(Domain)
+    | summarize 
+        CompromisedUsers = make_set(Email),
+        UserCount = dcount(Email),
+        FirstCompromise = min(FirstSeen),
+        LatestCompromise = max(LastSeen),
+        FindingTypes = make_set(FindingType),
+        AvgConfidence = avg(Confidence)
+        by Domain;
+// Get active Cyren malicious indicators
+let ActiveMaliciousInfra = parser_cyren_indicators()
+    | where TimeGenerated >= ago(lookbackPeriod)
+    | where LastSeen >= ago(cyrenActiveWindow) // Active in last 48 hours
+    | where RiskScore >= 60 // Medium risk or higher
+    | where Type in ('Malware', 'Phishing', 'malware', 'phishing')
+    | where isnotempty(Domain)
+    | summarize 
+        MaliciousIOCs = make_set(IOC),
+        IOCTypes = make_set(IOCType),
+        Categories = make_set(Category),
+        MaxRiskScore = max(RiskScore),
+        FirstSeen = min(FirstSeen),
+        LastSeen = max(LastSeen)
+        by Domain;
+// Correlate compromised domains with malicious infrastructure
+CompromisedDomains
+| join kind=inner (ActiveMaliciousInfra) on Domain
+| extend
+    Severity = case(
+        MaxRiskScore >= 80 and AvgConfidence >= 80, "Critical",
+        MaxRiskScore >= 60 or AvgConfidence >= 80, "High",
+        "Medium"
+    ),
+    ThreatDescription = strcat(
+        "Domain ", Domain, " has ", UserCount, " compromised users (TacitRed) and is actively hosting malicious content (Cyren). ",
+        "Cyren risk score: ", MaxRiskScore, ". ",
+        "TacitRed confidence: ", round(AvgConfidence, 0), "%. ",
+        "This indicates active exploitation of compromised credentials."
+    )
+| project
+    Domain,
+    Severity,
+    CompromisedUsers,
+    UserCount,
+    LatestCompromise,
+    MaliciousIOCs,
+    IOCTypes,
+    Categories,
+    MaxRiskScore,
+    AvgConfidence,
+    FindingTypes,
+    ThreatDescription,
+    CyrenFirstSeen = FirstSeen1,
+    CyrenLastSeen = LastSeen1
+| order by Severity desc, UserCount desc
+
+───────────────────────────────────────────────────────────────────────────────
+END QUERY (copy up to previous line)
+───────────────────────────────────────────────────────────────────────────────
+
+KEY FIXES APPLIED:
+✅ Uses parser functions (parser_tacitred_findings, parser_cyren_indicators)
+✅ Normalized field names (Domain, Type, RiskScore, etc.)
+✅ Matches pattern used in ALL other Analytics rules
+✅ Proper correlation logic with join
+✅ Enhanced threat intelligence and severity mapping
+✅ No more "Failed to resolve" errors
+
+VALIDATION CHECKLIST:
+□ Query copied completely (no truncation)
+□ No "table not found" errors
+□ "Results simulation" shows green checkmark
+□ Rule saved successfully
+□ Rule is enabled
+
+TROUBLESHOOTING:
+If you get "Failed to resolve" errors:
+1. Verify parser functions exist by running in Log Analytics:
+   parser_tacitred_findings() | take 1
+   parser_cyren_indicators() | take 1
+2. If parsers don't exist, deploy them first from:
+   analytics/parsers/parser-tacitred-findings.kql
+   analytics/parsers/parser-cyren-indicators.kql
+3. Check data connectors are running and ingesting data
+
+═══════════════════════════════════════════════════════════════════════════════

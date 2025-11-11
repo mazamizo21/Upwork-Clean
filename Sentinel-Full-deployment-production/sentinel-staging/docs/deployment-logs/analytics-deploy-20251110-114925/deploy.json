@@ -1,0 +1,125 @@
+WARNING: A new Bicep release is available: v0.38.33. Upgrade now by running "az bicep upgrade".
+WARNING: D:\REPO\Upwork-Clean\Sentinel-Full-deployment-production\sentinel-staging\analytics\analytics-rules-no-parsers.bicep(5,7) : Warning no-unused-params: Parameter "location" is declared but never used. [https://aka.ms/bicep/linter/no-unused-params]
+
+
+{
+  "id": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.Resources/deployments/analytics-noparsers-20251110-114925",
+  "location": null,
+  "name": "analytics-noparsers-20251110-114925",
+  "properties": {
+    "correlationId": "767c01ce-5c9e-4787-b5ef-85f19b3b4aad",
+    "debugSetting": null,
+    "dependencies": [],
+    "duration": "PT3.4039586S",
+    "error": null,
+    "mode": "Incremental",
+    "onErrorDeployment": null,
+    "outputResources": [
+      {
+        "id": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.OperationalInsights/workspaces/SentinelTestStixImportInstance/providers/Microsoft.SecurityInsights/alertRules/47a02cde-3321-5b91-a2a6-0f7a7b65e74c",
+        "resourceGroup": "SentinelTestStixImport"
+      },
+      {
+        "id": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.OperationalInsights/workspaces/SentinelTestStixImportInstance/providers/Microsoft.SecurityInsights/alertRules/a8a24192-e971-5735-b4d9-ca1e20531df2",
+        "resourceGroup": "SentinelTestStixImport"
+      },
+      {
+        "id": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.OperationalInsights/workspaces/SentinelTestStixImportInstance/providers/Microsoft.SecurityInsights/alertRules/acdacd20-19dd-5bb1-95f5-09a5e992dce3",
+        "resourceGroup": "SentinelTestStixImport"
+      },
+      {
+        "id": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.OperationalInsights/workspaces/SentinelTestStixImportInstance/providers/Microsoft.SecurityInsights/alertRules/b37c1f25-fd0f-5885-b9cc-978a1463835a",
+        "resourceGroup": "SentinelTestStixImport"
+      },
+      {
+        "id": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.OperationalInsights/workspaces/SentinelTestStixImportInstance/providers/Microsoft.SecurityInsights/alertRules/f2f4c7cb-ce83-5444-ae7b-58959f2a7202",
+        "resourceGroup": "SentinelTestStixImport"
+      },
+      {
+        "id": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.OperationalInsights/workspaces/SentinelTestStixImportInstance/providers/Microsoft.SecurityInsights/alertRules/fe162722-a504-5043-aeb3-f988808e3907",
+        "resourceGroup": "SentinelTestStixImport"
+      }
+    ],
+    "outputs": {
+      "ruleIds": {
+        "type": "Array",
+        "value": [
+          "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.OperationalInsights/workspaces/SentinelTestStixImportInstance/providers/Microsoft.SecurityInsights/alertRules/fe162722-a504-5043-aeb3-f988808e3907",
+          "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.OperationalInsights/workspaces/SentinelTestStixImportInstance/providers/Microsoft.SecurityInsights/alertRules/47a02cde-3321-5b91-a2a6-0f7a7b65e74c",
+          "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.OperationalInsights/workspaces/SentinelTestStixImportInstance/providers/Microsoft.SecurityInsights/alertRules/b37c1f25-fd0f-5885-b9cc-978a1463835a",
+          "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.OperationalInsights/workspaces/SentinelTestStixImportInstance/providers/Microsoft.SecurityInsights/alertRules/a8a24192-e971-5735-b4d9-ca1e20531df2",
+          "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.OperationalInsights/workspaces/SentinelTestStixImportInstance/providers/Microsoft.SecurityInsights/alertRules/acdacd20-19dd-5bb1-95f5-09a5e992dce3",
+          "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.OperationalInsights/workspaces/SentinelTestStixImportInstance/providers/Microsoft.SecurityInsights/alertRules/f2f4c7cb-ce83-5444-ae7b-58959f2a7202"
+        ]
+      }
+    },
+    "parameters": {
+      "enableActiveCompromisedAccount": {
+        "type": "Bool",
+        "value": true
+      },
+      "enableCrossFeedCorrelation": {
+        "type": "Bool",
+        "value": true
+      },
+      "enableDepartmentCluster": {
+        "type": "Bool",
+        "value": true
+      },
+      "enableHighRiskUser": {
+        "type": "Bool",
+        "value": true
+      },
+      "enableMalwareInfrastructure": {
+        "type": "Bool",
+        "value": true
+      },
+      "enableRepeatCompromise": {
+        "type": "Bool",
+        "value": true
+      },
+      "location": {
+        "type": "String",
+        "value": "eastus"
+      },
+      "workspaceName": {
+        "type": "String",
+        "value": "SentinelTestStixImportInstance"
+      }
+    },
+    "parametersLink": null,
+    "providers": [
+      {
+        "id": null,
+        "namespace": "Microsoft.SecurityInsights",
+        "providerAuthorizationConsentState": null,
+        "registrationPolicy": null,
+        "registrationState": null,
+        "resourceTypes": [
+          {
+            "aliases": null,
+            "apiProfiles": null,
+            "apiVersions": null,
+            "capabilities": null,
+            "defaultApiVersion": null,
+            "locationMappings": null,
+            "locations": [
+              null
+            ],
+            "properties": null,
+            "resourceType": "alertRules",
+            "zoneMappings": null
+          }
+        ]
+      }
+    ],
+    "provisioningState": "Succeeded",
+    "templateHash": "17831819001031951082",
+    "templateLink": null,
+    "timestamp": "2025-11-10T16:49:43.516932+00:00",
+    "validatedResources": null
+  },
+  "resourceGroup": "SentinelTestStixImport",
+  "tags": null,
+  "type": "Microsoft.Resources/deployments"
+}

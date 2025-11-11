@@ -1,0 +1,156 @@
+// EXECUTIVE RISK METRICS & BUSINESS IMPACT ANALYSIS
+// Innovation: Translates technical threats into business risk language
+// Provides C-level visibility with quantified risk metrics
+
+let riskWindow = {TimeRange:start} .. {TimeRange:end};
+let costPerIncident = 50000.0;  // Average cost per security incident
+let costPerCompromisedAccount = 5000.0;  // Average cost per compromised account
+
+// === CALCULATE RISK EXPOSURE ===
+let CyrenRisk = Cyren_MalwareUrls_CL
+| where TimeGenerated {TimeRange}
+| extend payload = parse_json(payload_s)
+| extend 
+    Risk = toint(coalesce(payload.risk, 50)),
+    LastSeen = todatetime(payload.last_seen),
+    Category = tostring(parse_json(tostring(payload.detection.category))[0])
+| extend 
+    IsActive = datetime_diff('hour', now(), LastSeen) <= 48,
+    IsCritical = Risk >= 80,
+    IsHigh = Risk >= 60 and Risk < 80
+| summarize 
+    TotalThreats = count(),
+    ActiveThreats = countif(IsActive),
+    CriticalThreats = countif(IsCritical),
+    HighThreats = countif(IsHigh),
+    AvgRisk = avg(Risk),
+    Categories = dcount(Category)
+| extend Source = "Cyren - Malware Infrastructure";
+
+let TacitRedRisk = TacitRed_Findings_CL
+| where TimeGenerated {TimeRange}
+| extend 
+    Confidence = todouble(confidence_d),
+    LastSeen = todatetime(lastSeen_t),
+    Domain = tostring(domain_s)
+| extend 
+    IsActive = datetime_diff('hour', now(), LastSeen) <= 48,
+    IsCritical = Confidence >= 90,
+    IsHigh = Confidence >= 75 and Confidence < 90
+| summarize 
+    TotalThreats = count(),
+    ActiveThreats = countif(IsActive),
+    CriticalThreats = countif(IsCritical),
+    HighThreats = countif(IsHigh),
+    AvgRisk = avg(Confidence),
+    AffectedDomains = dcount(Domain)
+| extend Source = "TacitRed - Credential Compromise";
+
+// === UNIFIED RISK METRICS ===
+union CyrenRisk, TacitRedRisk
+| summarize 
+    TotalThreats = sum(TotalThreats),
+    TotalActive = sum(ActiveThreats),
+    TotalCritical = sum(CriticalThreats),
+    TotalHigh = sum(HighThreats),
+    WeightedAvgRisk = avg(AvgRisk)
+| extend 
+    // === BUSINESS IMPACT SCORES ===
+    // Innovation: Risk-weighted business impact calculation
+    PotentialImpactScore = 
+        (TotalCritical * 100) +      // Critical threats = max impact
+        (TotalHigh * 60) +           // High threats = high impact
+        (TotalActive * 40),          // Active threats = medium impact
+    
+    // === FINANCIAL RISK EXPOSURE ===
+    // Estimated potential cost if all threats materialize
+    EstimatedFinancialRisk = 
+        (TotalCritical * costPerIncident) +
+        (TotalHigh * costPerIncident * 0.6) +
+        (TotalActive * costPerCompromisedAccount),
+    
+    // === OVERALL RISK LEVEL ===
+    OverallRiskLevel = case(
+        TotalCritical >= 10 or TotalActive >= 50, "🔴 Critical - Immediate Action Required",
+        TotalCritical >= 5 or TotalActive >= 25, "🟠 High - Urgent Response Needed",
+        TotalCritical >= 1 or TotalActive >= 10, "🟡 Elevated - Increased Monitoring",
+        "🟢 Normal - Routine Operations"
+    ),
+    
+    // === THREAT VELOCITY (Change rate) ===
+    ThreatVelocity = TotalActive  // Simplified - could compare to baseline
+| project 
+    OverallRiskLevel,
+    TotalThreats,
+    ActiveThreats = TotalActive,
+    CriticalThreats = TotalCritical,
+    HighThreats = TotalHigh,
+    WeightedAvgRisk = round(WeightedAvgRisk, 2),
+    PotentialImpactScore,
+    EstimatedFinancialRisk = round(EstimatedFinancialRisk, 2),
+    RiskExposureTrend = case(
+        TotalActive >= 50, "📈 Increasing Rapidly",
+        TotalActive >= 25, "📈 Increasing",
+        TotalActive >= 10, "➡️ Stable",
+        "📉 Decreasing"
+    );
+
+// === SLA METRICS (from SecurityIncident table) ===
+let SLAMetrics = SecurityIncident
+| where TimeGenerated {TimeRange}
+| extend 
+    ClosedTime = todatetime(ClosedTime),
+    CreatedTime = todatetime(CreatedTime)
+| where isnotnull(ClosedTime)
+| extend 
+    ResolutionTimeHours = datetime_diff('hour', ClosedTime, CreatedTime),
+    Severity = tostring(Severity)
+| summarize 
+    TotalIncidents = count(),
+    AvgResolutionTimeHours = round(avg(ResolutionTimeHours), 2),
+    MedianResolutionTime = round(percentile(ResolutionTimeHours, 50), 2),
+    P90ResolutionTime = round(percentile(ResolutionTimeHours, 90), 2),
+    SLAViolations = countif(ResolutionTimeHours > 24),  // Assuming 24h SLA
+    CriticalIncidents = countif(Severity == "High"),
+    OpenIncidents = countif(isempty(ClosedTime))
+    by bin(TimeGenerated, 1d)
+| extend 
+    SLAComplianceRate = round((1.0 - (todouble(SLAViolations) / todouble(TotalIncidents))) * 100.0, 2),
+    SLAStatus = case(
+        SLAComplianceRate >= 95, "🟢 Excellent (≥95%)",
+        SLAComplianceRate >= 85, "🟡 Good (≥85%)",
+        SLAComplianceRate >= 75, "🟠 Fair (≥75%)",
+        "🔴 Poor (<75%)"
+    );
+
+// === TREND ANALYSIS ===
+let TrendAnalysis = union Cyren_MalwareUrls_CL, TacitRed_Findings_CL
+| where TimeGenerated >= ago(30d)  // 30-day trend window
+| summarize Count = count() by bin(TimeGenerated, 1d), Source = case(
+    $table == "Cyren_MalwareUrls_CL", "Cyren",
+    "TacitRed"
+)
+| order by Source, TimeGenerated asc
+| partition by Source (
+    extend 
+        MA_7d = row_window_session(Count, TimeGenerated, 604800000, avg),  // 7-day moving avg
+        PrevCount = prev(Count, 1),
+        TrendDirection = case(
+            Count > prev(Count, 1) * 1.2, "📈 Increasing (>20%)",
+            Count < prev(Count, 1) * 0.8, "📉 Decreasing (>20%)",
+            "➡️ Stable"
+        )
+)
+| where TimeGenerated {TimeRange}
+| summarize 
+    CurrentTrend = take_any(TrendDirection),
+    AvgDaily = round(avg(Count), 2),
+    MA7d = round(avg(MA_7d), 2)
+    by Source;
+
+// === BUSINESS RISK DASHBOARD ===
+// Return executive summary
+print 
+    Report = "Executive Risk & Business Impact Dashboard",
+    TimeRange = strcat(format_datetime(huntingWindow, 'yyyy-MM-dd HH:mm'), " to ", format_datetime(now(), 'yyyy-MM-dd HH:mm')),
+    GeneratedAt = now()

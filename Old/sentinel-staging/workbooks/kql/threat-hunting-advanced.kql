@@ -1,0 +1,173 @@
+// ADVANCED THREAT HUNTING QUERIES
+// Innovation: Behavioral analytics + IOC pivot + Timeline reconstruction
+// Provides threat hunters with deep investigative capabilities
+
+let huntingWindow = {TimeRange:start} .. {TimeRange:end};
+
+// === BEHAVIORAL ANOMALY: RAPID CREDENTIAL REUSE ===
+// Detects accounts that show up in multiple TacitRed findings quickly
+let RapidCredentialReuse = TacitRed_Findings_CL
+| where TimeGenerated {TimeRange}
+| extend 
+    Email = tostring(email_s),
+    Domain = tostring(domain_s),
+    FirstSeen = todatetime(firstSeen_t),
+    LastSeen = todatetime(lastSeen_t),
+    Confidence = todouble(confidence_d)
+| summarize 
+    FindingCount = count(),
+    Domains = make_set(Domain),
+    MinFirstSeen = min(FirstSeen),
+    MaxLastSeen = max(LastSeen),
+    AvgConfidence = avg(Confidence)
+    by Email
+| extend 
+    TimeSpanHours = datetime_diff('hour', MaxLastSeen, MinFirstSeen),
+    UniqueDomains = array_length(Domains),
+    ReuseVelocity = iff(TimeSpanHours > 0, todouble(FindingCount) / todouble(TimeSpanHours), 0.0),
+    BehaviorScore = case(
+        FindingCount >= 5 and TimeSpanHours <= 24, 95,  // 5+ findings in 24h = bot/spray
+        FindingCount >= 3 and TimeSpanHours <= 72, 85,  // 3+ findings in 3 days
+        FindingCount >= 2 and UniqueDomains >= 2, 75,   // Multiple domains
+        50
+    )
+| where BehaviorScore >= 75
+| extend HuntingFlag = "🎯 Rapid Credential Reuse"
+| project 
+    HuntingFlag, Email, FindingCount, UniqueDomains, 
+    TimeSpanHours, ReuseVelocity, BehaviorScore, 
+    FirstDetection = MinFirstSeen, LastDetection = MaxLastSeen,
+    AffectedDomains = strcat_array(Domains, ", ");
+
+// === BEHAVIORAL ANOMALY: PERSISTENT MALWARE INFRASTRUCTURE ===
+// Detects infrastructure that keeps reappearing despite takedowns
+let PersistentInfrastructure = Cyren_MalwareUrls_CL
+| where TimeGenerated >= ago(30d)  // Look back 30 days for persistence
+| extend payload = parse_json(payload_s)
+| extend 
+    Domain = tostring(coalesce(
+        payload.domain,
+        extract(@"://([^/]+)", 1, tostring(payload.url))
+    )),
+    FirstSeen = todatetime(payload.first_seen),
+    LastSeen = todatetime(payload.last_seen),
+    Category = tostring(parse_json(tostring(payload.detection.category))[0]),
+    Risk = toint(coalesce(payload.risk, 50))
+| where isnotempty(Domain)
+| summarize 
+    DetectionCount = count(),
+    DetectionDays = make_set(bin(TimeGenerated, 1d)),
+    Categories = make_set(Category),
+    FirstDetection = min(FirstSeen),
+    LastDetection = max(LastSeen),
+    MaxRisk = max(Risk)
+    by Domain
+| extend 
+    ActiveDays = array_length(DetectionDays),
+    LifespanDays = datetime_diff('day', LastDetection, FirstDetection),
+    IsCurrentlyActive = datetime_diff('hour', now(), LastDetection) <= 48,
+    PersistenceScore = case(
+        ActiveDays >= 20 and IsCurrentlyActive, 100,
+        ActiveDays >= 14 and IsCurrentlyActive, 90,
+        ActiveDays >= 10 and IsCurrentlyActive, 80,
+        ActiveDays >= 7, 70,
+        60
+    )
+| where PersistenceScore >= 80 and IsCurrentlyActive
+| extend HuntingFlag = "🎯 Persistent Malware Infrastructure"
+| project 
+    HuntingFlag, Domain, DetectionCount, ActiveDays, LifespanDays,
+    PersistenceScore, IsCurrentlyActive, MaxRisk,
+    FirstDetection, LastDetection,
+    MalwareCategories = strcat_array(Categories, ", ");
+
+// === ATTACK CHAIN RECONSTRUCTION ===
+// Links compromised credentials to malware infrastructure access
+let CredentialCompromise = TacitRed_Findings_CL
+| where TimeGenerated {TimeRange}
+| extend 
+    Email = tostring(email_s),
+    Domain = tostring(domain_s),
+    CompromiseTime = todatetime(lastSeen_t)
+| project Email, Domain, CompromiseTime;
+
+let MalwareAccess = Cyren_MalwareUrls_CL
+| where TimeGenerated {TimeRange}
+| extend payload = parse_json(payload_s)
+| extend 
+    TargetDomain = tostring(coalesce(
+        payload.domain,
+        extract(@"://([^/]+)", 1, tostring(payload.url))
+    )),
+    AccessTime = todatetime(payload.last_seen),
+    Category = tostring(parse_json(tostring(payload.detection.category))[0]),
+    Risk = toint(coalesce(payload.risk, 50))
+| project TargetDomain, AccessTime, Category, Risk;
+
+let AttackChain = CredentialCompromise
+| join kind=inner (MalwareAccess) on $left.Domain == $right.TargetDomain
+| extend 
+    TimeGapHours = datetime_diff('hour', AccessTime, CompromiseTime),
+    ChainLikelihood = case(
+        TimeGapHours >= -6 and TimeGapHours <= 24, "Very High (0-24h gap)",
+        TimeGapHours > 24 and TimeGapHours <= 72, "High (24-72h gap)",
+        TimeGapHours > 72 and TimeGapHours <= 168, "Medium (3-7 days gap)",
+        "Low (>7 days gap)"
+    ),
+    AttackPhase = case(
+        TimeGapHours <= 1, "Phase 1: Initial Compromise → Immediate Exploitation",
+        TimeGapHours <= 24, "Phase 2: Reconnaissance → Lateral Movement",
+        TimeGapHours <= 168, "Phase 3: Persistence → Data Exfiltration",
+        "Phase 4: Long-term Persistence"
+    )
+| where TimeGapHours >= -24 and TimeGapHours <= 168  // Focus on realistic timelines
+| extend HuntingFlag = "🎯 Attack Chain Detected"
+| project 
+    HuntingFlag, Email, Domain, 
+    CompromiseTime, AccessTime, TimeGapHours,
+    ChainLikelihood, AttackPhase, Category, Risk;
+
+// === IOC ENRICHMENT: INDICATORS WITH MULTIPLE CONTEXTS ===
+// Finds indicators that appear across multiple threat contexts
+let EnrichedIOCs = Cyren_MalwareUrls_CL
+| where TimeGenerated {TimeRange}
+| extend payload = parse_json(payload_s)
+| extend 
+    Indicator = tolower(tostring(coalesce(
+        payload.domain,
+        payload.ip,
+        extract(@"://([^/]+)", 1, tostring(payload.url))
+    ))),
+    Context = strcat("Cyren-", tostring(parse_json(tostring(payload.detection.category))[0])),
+    Risk = toint(coalesce(payload.risk, 50)),
+    DetectionTime = todatetime(payload.last_seen)
+| where isnotempty(Indicator)
+| summarize 
+    ContextCount = dcount(Context),
+    Contexts = make_set(Context),
+    DetectionTimes = make_set(DetectionTime),
+    MaxRisk = max(Risk)
+    by Indicator
+| where ContextCount >= 2  // Multi-context indicators
+| extend 
+    EnrichmentScore = (ContextCount * 20) + MaxRisk,
+    HuntingFlag = "🎯 Multi-Context IOC"
+| project 
+    HuntingFlag, Indicator, ContextCount, EnrichmentScore,
+    Contexts = strcat_array(Contexts, " | "),
+    FirstSeen = array_sort_asc(DetectionTimes)[0],
+    LastSeen = array_sort_desc(DetectionTimes)[0];
+
+// === UNION ALL HUNTING RESULTS ===
+union 
+    (RapidCredentialReuse | extend HuntType = "Behavioral: Credential Reuse"),
+    (PersistentInfrastructure | extend HuntType = "Infrastructure: Persistence"),
+    (AttackChain | extend HuntType = "Attack Chain: Multi-Stage"),
+    (EnrichedIOCs | extend HuntType = "IOC: Multi-Context")
+| extend InvestigationPriority = case(
+    HuntType contains "Attack Chain", 1,
+    HuntType contains "Behavioral", 2,
+    HuntType contains "Persistence", 3,
+    4
+)
+| order by InvestigationPriority asc, BehaviorScore desc, PersistenceScore desc

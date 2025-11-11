@@ -1,0 +1,8 @@
+{
+  "streams": [
+    "Custom-Cyren_Indicators_CL",
+    "Custom-Cyren_IpReputation_CL",
+    "Custom-Cyren_IpReputation_Raw"
+  ],
+  "dcr": "dcr-cyren-ip"
+}

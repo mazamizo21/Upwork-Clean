@@ -1,0 +1,9 @@
+{
+  "streams": [
+    "Custom-Cyren_Indicators_CL",
+    "Custom-Cyren_IpReputation_CL",
+    "Custom-Cyren_IpReputation_Raw"
+  ],
+  "dcr": "dcr-cyren-ip",
+  "dceUsed": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.Insights/dataCollectionEndpoints/dce-sentinel-ti"
+}

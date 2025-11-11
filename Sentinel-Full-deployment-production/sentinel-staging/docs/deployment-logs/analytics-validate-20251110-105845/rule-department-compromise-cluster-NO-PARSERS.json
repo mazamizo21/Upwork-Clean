@@ -1,0 +1,5 @@
+ERROR: unrecognized arguments: users in , Department,  department compromised. ,         Total compromises: , TotalCompromises, . ,         Compromise window: , CompromiseWindow,  days. ,         This may indicate a targeted campaign or department-wide vulnerability.     ) | project     Department,     Severity,     AffectedUserCount,     AffectedUsers,     TotalCompromises,     FirstCompromise,     LatestCompromise,     CompromiseWindow,     AvgConfidence,     JobTitles,     Managers,     FindingTypes,     ThreatDescription | order by AffectedUserCount desc, LatestCompromise desc  
+
+Examples from AI knowledge base:
+https://aka.ms/cli_ref
+Read more about the command in reference docs

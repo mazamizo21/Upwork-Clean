@@ -1,0 +1,75 @@
+{
+  "tables": [
+    {
+      "columns": [
+        {
+          "name": "Department",
+          "type": "string"
+        },
+        {
+          "name": "Severity",
+          "type": "string"
+        },
+        {
+          "name": "AffectedUserCount",
+          "type": "long"
+        },
+        {
+          "name": "TotalCompromises",
+          "type": "long"
+        },
+        {
+          "name": "FirstCompromise",
+          "type": "datetime"
+        },
+        {
+          "name": "LatestCompromise",
+          "type": "datetime"
+        },
+        {
+          "name": "CompromiseWindow",
+          "type": "long"
+        },
+        {
+          "name": "AvgConfidence",
+          "type": "real"
+        },
+        {
+          "name": "FindingTypes",
+          "type": "dynamic"
+        },
+        {
+          "name": "ThreatDescription",
+          "type": "string"
+        }
+      ],
+      "name": "PrimaryResult",
+      "rows": [
+        [
+          "apple.com",
+          "Critical",
+          30,
+          32200,
+          "2025-10-11T22:24:00Z",
+          "2025-10-18T00:00:00Z",
+          7,
+          99,
+          "[\"compromised_credential\",\"session\"]",
+          "30 users in apple.com department compromised. Total compromises: 32200. Compromise window: 7 days. This may indicate a targeted campaign or department-wide vulnerability."
+        ],
+        [
+          "sony.com",
+          "Critical",
+          22,
+          22540,
+          "2025-10-11T13:39:00Z",
+          "2025-10-18T00:00:00Z",
+          7,
+          99,
+          "[\"compromised_credential\",\"session\"]",
+          "22 users in sony.com department compromised. Total compromises: 22540. Compromise window: 7 days. This may indicate a targeted campaign or department-wide vulnerability."
+        ]
+      ]
+    }
+  ]
+}

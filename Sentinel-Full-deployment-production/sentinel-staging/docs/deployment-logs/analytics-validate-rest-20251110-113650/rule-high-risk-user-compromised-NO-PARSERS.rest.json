@@ -1,0 +1,62 @@
+{
+  "tables": [
+    {
+      "columns": [
+        {
+          "name": "Email",
+          "type": "string"
+        },
+        {
+          "name": "Severity",
+          "type": "string"
+        },
+        {
+          "name": "TacitRedFindings",
+          "type": "long"
+        },
+        {
+          "name": "LatestCompromise",
+          "type": "datetime"
+        },
+        {
+          "name": "RiskySignInCount",
+          "type": "long"
+        },
+        {
+          "name": "LatestRiskySignIn",
+          "type": "datetime"
+        },
+        {
+          "name": "TimeBetweenEvents",
+          "type": "long"
+        },
+        {
+          "name": "FindingTypes",
+          "type": "dynamic"
+        },
+        {
+          "name": "AvgConfidence",
+          "type": "real"
+        },
+        {
+          "name": "RiskLevels",
+          "type": "dynamic"
+        },
+        {
+          "name": "RiskDetails",
+          "type": "dynamic"
+        },
+        {
+          "name": "IPAddresses",
+          "type": "dynamic"
+        },
+        {
+          "name": "Locations",
+          "type": "dynamic"
+        }
+      ],
+      "name": "PrimaryResult",
+      "rows": []
+    }
+  ]
+}

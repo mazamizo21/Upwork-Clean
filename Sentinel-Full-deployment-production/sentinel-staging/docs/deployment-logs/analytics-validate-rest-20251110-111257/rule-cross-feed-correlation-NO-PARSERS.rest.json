@@ -1,0 +1,1 @@
+ERROR: Bad Request({"error":{"message":"The request had some invalid properties","code":"BadArgumentError","correlationId":"563a8e8a-7db6-497c-97d9-339d866c230d","innererror":{"code":"SemanticError","message":"A semantic error occurred.","innererror":{"code":"SEM0100","message":"'extend' operator: Failed to resolve column or scalar expression named 'IOCType'"}}}})

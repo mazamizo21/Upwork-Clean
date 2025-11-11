@@ -1,0 +1,73 @@
+// Analytics Rule: Cross-Feed Correlation (TacitRed + Cyren)
+// Detects when a compromised domain (TacitRed) matches active malicious infrastructure (Cyren)
+// This indicates the compromised credentials may be actively used in attacks
+// Severity: Critical
+// Tactics: Credential Access, Command and Control
+// Frequency: 1 hour
+// Query Period: 7 days
+// NOTE: Requires Cyren feed to be active
+
+let lookbackPeriod = 7d;
+let cyrenActiveWindow = 48h; // Consider Cyren indicators active if seen in last 48 hours
+// Get TacitRed compromised domains
+let CompromisedDomains = parser_tacitred_findings()
+    | where TimeGenerated >= ago(lookbackPeriod)
+    | where isnotempty(Domain)
+    | summarize 
+        CompromisedUsers = make_set(Email),
+        UserCount = dcount(Email),
+        FirstCompromise = min(FirstSeen),
+        LatestCompromise = max(LastSeen),
+        FindingTypes = make_set(FindingType),
+        AvgConfidence = avg(Confidence)
+        by Domain;
+// Get active Cyren malicious indicators
+let ActiveMaliciousInfra = parser_cyren_indicators()
+    | where TimeGenerated >= ago(lookbackPeriod)
+    | where LastSeen >= ago(cyrenActiveWindow) // Active in last 48 hours
+    | where RiskScore >= 60 // Medium risk or higher
+    | extend MaliciousDomain = case(
+        IOCType == "Domain", Domain,
+        IOCType == "URL", tostring(parse_url(URL).Host),
+        ""
+    )
+    | where isnotempty(MaliciousDomain)
+    | summarize 
+        MaliciousIOCs = make_set(IOC),
+        IOCTypes = make_set(IOCType),
+        Categories = make_set(Category),
+        MaxRiskScore = max(RiskScore),
+        FirstSeen = min(FirstSeen),
+        LastSeen = max(LastSeen)
+        by MaliciousDomain;
+// Correlate compromised domains with malicious infrastructure
+CompromisedDomains
+| join kind=inner (ActiveMaliciousInfra) on $left.Domain == $right.MaliciousDomain
+| extend
+    Severity = case(
+        MaxRiskScore >= 80 and AvgConfidence >= 80, "Critical",
+        MaxRiskScore >= 60 or AvgConfidence >= 80, "High",
+        "Medium"
+    ),
+    ThreatDescription = strcat(
+        "Domain ", Domain, " has ", UserCount, " compromised users (TacitRed) and is actively hosting malicious content (Cyren). ",
+        "Cyren risk score: ", MaxRiskScore, ". ",
+        "TacitRed confidence: ", round(AvgConfidence, 0), "%. ",
+        "This indicates active exploitation of compromised credentials."
+    )
+| project
+    Domain,
+    Severity,
+    CompromisedUsers,
+    UserCount,
+    LatestCompromise,
+    MaliciousIOCs,
+    IOCTypes,
+    Categories,
+    MaxRiskScore,
+    AvgConfidence,
+    FindingTypes,
+    ThreatDescription,
+    CyrenFirstSeen = FirstSeen1,
+    CyrenLastSeen = LastSeen1
+| order by Severity desc, UserCount desc

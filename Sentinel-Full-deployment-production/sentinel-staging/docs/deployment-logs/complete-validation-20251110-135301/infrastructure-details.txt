@@ -1,0 +1,4 @@
+DCE_ENDPOINT=https://dce-sentinel-ti-i4ug.eastus-1.ingest.monitor.azure.com
+dcr-cyren-ip=dcr-893afc8aa78542dea75871733155a0a7
+dcr-cyren-malware=dcr-893afc8aa78542dea75871733155a0a7
+dcr-tacitred-findings=dcr-893afc8aa78542dea75871733155a0a7

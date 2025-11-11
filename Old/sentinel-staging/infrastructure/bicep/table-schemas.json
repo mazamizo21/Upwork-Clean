@@ -1,0 +1,59 @@
+{
+  "cyren_indicators_schema": {
+    "tableName": "Cyren_Indicators_CL",
+    "columns": [
+      { "name": "TimeGenerated", "type": "datetime" },
+      { "name": "url_s", "type": "string" },
+      { "name": "ip_s", "type": "string" },
+      { "name": "fileHash_s", "type": "string" },
+      { "name": "domain_s", "type": "string" },
+      { "name": "protocol_s", "type": "string" },
+      { "name": "port_d", "type": "int" },
+      { "name": "category_s", "type": "string" },
+      { "name": "risk_d", "type": "int" },
+      { "name": "firstSeen_t", "type": "datetime" },
+      { "name": "lastSeen_t", "type": "datetime" },
+      { "name": "source_s", "type": "string" },
+      { "name": "relationships_s", "type": "string" },
+      { "name": "detection_methods_s", "type": "string" },
+      { "name": "action_s", "type": "string" },
+      { "name": "type_s", "type": "string" },
+      { "name": "identifier_s", "type": "string" },
+      { "name": "detection_ts_t", "type": "datetime" },
+      { "name": "object_type_s", "type": "string" }
+    ]
+  },
+  "tacitred_findings_schema": {
+    "tableName": "TacitRed_Findings_CL",
+    "columns": [
+      { "name": "TimeGenerated", "type": "datetime" },
+      { "name": "email_s", "type": "string" },
+      { "name": "domain_s", "type": "string" },
+      { "name": "findingType_s", "type": "string" },
+      { "name": "confidence_d", "type": "int" },
+      { "name": "firstSeen_t", "type": "datetime" },
+      { "name": "lastSeen_t", "type": "datetime" },
+      { "name": "notes_s", "type": "string" },
+      { "name": "source_s", "type": "string" },
+      { "name": "severity_s", "type": "string" },
+      { "name": "status_s", "type": "string" },
+      { "name": "campaign_id_s", "type": "string" },
+      { "name": "user_id_s", "type": "string" },
+      { "name": "username_s", "type": "string" },
+      { "name": "detection_ts_t", "type": "datetime" },
+      { "name": "metadata_s", "type": "string" }
+    ]
+  },
+  "ip_enrichment_schema": {
+    "tableName": "IpEnrichment_CL",
+    "columns": [
+      { "name": "TimeGenerated", "type": "datetime" },
+      { "name": "ip_s", "type": "string" },
+      { "name": "country_s", "type": "string" },
+      { "name": "asn_s", "type": "string" },
+      { "name": "org_s", "type": "string" },
+      { "name": "source_s", "type": "string" },
+      { "name": "lastEnriched_t", "type": "datetime" }
+    ]
+  }
+}

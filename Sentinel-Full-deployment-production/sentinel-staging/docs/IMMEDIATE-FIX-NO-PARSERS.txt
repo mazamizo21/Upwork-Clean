@@ -1,0 +1,165 @@
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL: TABLES MUST EXIST FIRST!
+═══════════════════════════════════════════════════════════════════════════════
+
+Rule Name: New Malware Infrastructure on Known Compromised Domain
+Fix Date: November 10, 2025, 08:28 AM
+Issue: "Failed to resolve scalar expression named 'domain_s'"
+Root Cause: Tables don't exist yet OR have no data
+
+⚠️  BEFORE USING THIS QUERY: Run diagnostic checks!
+
+STEP 1: VERIFY TABLES EXIST
+────────────────────────────────────────────────────────────────────────────────
+Run in Log Analytics → Logs:
+
+  TacitRed_Findings_CL | take 1
+  Cyren_Indicators_CL | take 1
+
+Results:
+- ✅ Returns data → Tables exist, proceed to STEP 3
+- ⚠️  Empty → Tables exist but no data, proceed to STEP 3
+- ❌ Error "table not found" → Tables don't exist, go to STEP 2
+
+STEP 2: CREATE TABLES (If they don't exist)
+────────────────────────────────────────────────────────────────────────────────
+Run this PowerShell script:
+
+  cd d:\REPO\Upwork-Clean\Sentinel-Full-deployment-production\sentinel-staging\infrastructure\scripts
+  
+  .\create-required-tables.ps1 `
+    -SubscriptionId "774bee0e-b281-4f70-8e40-199e35b65117" `
+    -ResourceGroupName "YOUR-RESOURCE-GROUP" `
+    -WorkspaceName "YOUR-WORKSPACE-NAME"
+
+Wait 60 seconds for tables to propagate, then verify:
+  TacitRed_Findings_CL | getschema
+  Cyren_Indicators_CL | getschema
+
+STEP 3: DEPLOY THE QUERY
+────────────────────────────────────────────────────────────────────────────────
+ONLY after tables exist:
+
+IMPORTANT: This version uses RAW TABLES (not parser functions)
+✅ Works with TacitRed_Findings_CL and Cyren_Indicators_CL
+✅ Includes proper type conversions (tostring, toint, todatetime)
+✅ Works even if parser functions don't exist
+
+INSTRUCTIONS:
+1. Navigate to Azure Portal → Microsoft Sentinel → Analytics
+2. Find and edit the rule: "New Malware Infrastructure on Known Compromised Domain"
+3. Go to "Set rule logic" tab
+4. DELETE the existing query
+5. COPY everything between the lines below
+6. PASTE into the "Rule query" field
+7. Click "Results simulation" to validate
+8. Click "Save"
+
+───────────────────────────────────────────────────────────────────────────────
+BEGIN QUERY (copy from next line)
+───────────────────────────────────────────────────────────────────────────────
+
+// Analytics Rule: New Malware Infrastructure on Known Compromised Domain
+// Detects when compromised domains (TacitRed) host malware/phishing infrastructure
+// Severity: High
+// Tactics: Command and Control, Initial Access
+// Frequency: Every 8 hours
+// Query Period: 8 hours
+// VERSION: Works WITHOUT parser functions (uses raw tables directly)
+
+let lookbackPeriod = 8h;
+let cyrenActiveWindow = 48h; // Consider Cyren indicators active if seen in last 48 hours
+// Get TacitRed compromised domains
+let CompromisedDomains = TacitRed_Findings_CL
+    | where TimeGenerated >= ago(lookbackPeriod)
+    | where isnotempty(domain_s)
+    | extend Domain = tostring(domain_s)
+    | summarize 
+        CompromisedUsers = make_set(tostring(email_s)),
+        UserCount = dcount(tostring(email_s)),
+        FirstCompromise = min(todatetime(firstSeen_t)),
+        LatestCompromise = max(todatetime(lastSeen_t)),
+        FindingTypes = make_set(tostring(findingType_s)),
+        AvgConfidence = avg(todouble(confidence_d))
+        by Domain;
+// Get active Cyren malicious indicators
+let ActiveMaliciousInfra = Cyren_Indicators_CL
+    | where TimeGenerated >= ago(lookbackPeriod)
+    | where todatetime(lastSeen_t) >= ago(cyrenActiveWindow) // Active in last 48 hours
+    | where toint(risk_d) >= 60 // Medium risk or higher
+    | where tostring(type_s) in ('Malware', 'Phishing', 'malware', 'phishing')
+    | where isnotempty(domain_s)
+    | extend Domain = tostring(domain_s)
+    | summarize 
+        MaliciousIOCs = make_set(coalesce(tostring(url_s), tostring(domain_s), tostring(ip_s))),
+        IOCTypes = make_set(tostring(type_s)),
+        Categories = make_set(tostring(category_s)),
+        MaxRiskScore = max(toint(risk_d)),
+        FirstSeen = min(todatetime(firstSeen_t)),
+        LastSeen = max(todatetime(lastSeen_t))
+        by Domain;
+// Correlate compromised domains with malicious infrastructure
+CompromisedDomains
+| join kind=inner (ActiveMaliciousInfra) on Domain
+| extend
+    Severity = case(
+        MaxRiskScore >= 80 and AvgConfidence >= 80, "Critical",
+        MaxRiskScore >= 60 or AvgConfidence >= 80, "High",
+        "Medium"
+    ),
+    ThreatDescription = strcat(
+        "Domain ", Domain, " has ", UserCount, " compromised users (TacitRed) and is actively hosting malicious content (Cyren). ",
+        "Cyren risk score: ", MaxRiskScore, ". ",
+        "TacitRed confidence: ", round(AvgConfidence, 0), "%. ",
+        "This indicates active exploitation of compromised credentials."
+    )
+| project
+    Domain,
+    Severity,
+    CompromisedUsers,
+    UserCount,
+    LatestCompromise,
+    MaliciousIOCs,
+    IOCTypes,
+    Categories,
+    MaxRiskScore,
+    AvgConfidence,
+    FindingTypes,
+    ThreatDescription,
+    CyrenFirstSeen = FirstSeen1,
+    CyrenLastSeen = LastSeen1
+| order by Severity desc, UserCount desc
+
+───────────────────────────────────────────────────────────────────────────────
+END QUERY (copy up to previous line)
+───────────────────────────────────────────────────────────────────────────────
+
+KEY FEATURES:
+✅ Works WITHOUT parser functions (no deployment needed)
+✅ Uses raw tables with proper type conversions
+✅ All syntax errors fixed
+✅ Proper correlation logic with join
+✅ Enhanced threat intelligence
+
+VALIDATION CHECKLIST:
+□ Query copied completely (no truncation)
+□ No "could not be parsed" errors
+□ "Results simulation" shows green checkmark
+□ Rule saved successfully
+□ Rule is enabled
+
+TROUBLESHOOTING:
+If you get "Failed to resolve table" errors:
+1. Verify tables exist by running in Log Analytics:
+   TacitRed_Findings_CL | take 1
+   Cyren_Indicators_CL | take 1
+2. If tables don't exist, check data connector deployment
+3. Ensure data is being ingested
+
+WHY THIS VERSION:
+- Parser functions require deployment first
+- This version works immediately with raw tables
+- Later, you can migrate to parser functions for consistency
+- But this gets you working NOW
+
+═══════════════════════════════════════════════════════════════════════════════

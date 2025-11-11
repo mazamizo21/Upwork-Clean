@@ -1,0 +1,1 @@
+ERROR: Bad Request({"error":{"message":"The request had some invalid properties","code":"BadArgumentError","correlationId":"4e3c5e59-ee7f-49dc-a57f-d582a28df23f","innererror":{"code":"SemanticError","message":"A semantic error occurred.","innererror":{"code":"SEM0100","message":"'extend' operator: Failed to resolve scalar expression named 'CompromiseWindow'"}}}})

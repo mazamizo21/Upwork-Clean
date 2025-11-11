@@ -1,0 +1,120 @@
+// STATISTICAL ANOMALY DETECTION
+// Innovation: Multi-method anomaly detection using Z-Score, IQR, and Percentile thresholds
+// Uses 7-day baseline to detect unusual spikes in threat activity
+
+let anomalyWindow = {TimeRange:start} .. {TimeRange:end};
+let baselineWindow = ago(7d);
+let stddevMultiplier = 2.5;  // 2.5 sigma = 98.8% confidence interval
+
+// === CALCULATE BASELINE STATISTICS ===
+let Baseline = union Cyren_MalwareUrls_CL, TacitRed_Findings_CL
+| where TimeGenerated between (baselineWindow .. ago(1h))
+| extend Source = case(
+    $table == "Cyren_MalwareUrls_CL", "Cyren",
+    "TacitRed"
+)
+| summarize Count = count() by bin(TimeGenerated, 1h), Source
+| summarize 
+    // Central tendency
+    Mean = avg(Count),
+    Median = percentile(Count, 50),
+    // Dispersion
+    StdDev = stdev(Count),
+    Variance = variance(Count),
+    // Percentiles for IQR method
+    Q1 = percentile(Count, 25),
+    Q3 = percentile(Count, 75),
+    P90 = percentile(Count, 90),
+    P95 = percentile(Count, 95),
+    P99 = percentile(Count, 99),
+    // Min/Max
+    Min = min(Count),
+    Max = max(Count)
+    by Source
+| extend 
+    IQR = Q3 - Q1,
+    // IQR-based thresholds (1.5 * IQR is standard, 3.0 is extreme)
+    IQR_Upper_Moderate = Q3 + (1.5 * (Q3 - Q1)),
+    IQR_Upper_Severe = Q3 + (3.0 * (Q3 - Q1)),
+    // Z-Score thresholds
+    ZScore_Threshold = Mean + (stddevMultiplier * StdDev);
+
+// === CURRENT ACTIVITY ===
+let CurrentActivity = union Cyren_MalwareUrls_CL, TacitRed_Findings_CL
+| where TimeGenerated {TimeRange}
+| extend Source = case(
+    $table == "Cyren_MalwareUrls_CL", "Cyren",
+    "TacitRed"
+)
+| summarize Count = count() by bin(TimeGenerated, 1h), Source;
+
+// === JOIN AND DETECT ANOMALIES ===
+CurrentActivity
+| join kind=inner (Baseline) on Source
+| extend 
+    // === Z-SCORE METHOD ===
+    ZScore = round((Count - Mean) / StdDev, 2),
+    IsZScoreAnomaly = (Count > ZScore_Threshold),
+    
+    // === IQR METHOD ===
+    IsIQR_ModerateAnomaly = (Count > IQR_Upper_Moderate),
+    IsIQR_SevereAnomaly = (Count > IQR_Upper_Severe),
+    
+    // === PERCENTILE METHOD ===
+    IsP95_Anomaly = (Count > P95),
+    IsP99_Anomaly = (Count > P99),
+    
+    // === COMBINED ANOMALY DETECTION ===
+    // Innovation: Multi-method consensus approach
+    AnomalyScore = 
+        (iff(IsZScoreAnomaly, 30, 0)) +
+        (iff(IsIQR_ModerateAnomaly, 20, 0)) +
+        (iff(IsIQR_SevereAnomaly, 30, 0)) +
+        (iff(IsP95_Anomaly, 10, 0)) +
+        (iff(IsP99_Anomaly, 10, 0)),
+    
+    // Deviation metrics
+    DeviationFromMean = Count - Mean,
+    DeviationPct = round(((Count - Mean) / Mean) * 100.0, 2),
+    DeviationFromMedian = Count - Median,
+    
+    // Severity classification
+    AnomalySeverity = case(
+        Count > P99, "🔴 Critical (>P99)",
+        ZScore >= 3.0, "🔴 Critical (>3σ)",
+        Count > P95 or ZScore >= 2.5, "🟠 High (>P95 or >2.5σ)",
+        Count > IQR_Upper_Moderate, "🟡 Moderate (>IQR*1.5)",
+        "🟢 Normal"
+    ),
+    
+    // Anomaly classification
+    AnomalyType = case(
+        IsP99_Anomaly and IsZScoreAnomaly and IsIQR_SevereAnomaly, "Extreme Outlier (All Methods)",
+        IsP99_Anomaly and IsZScoreAnomaly, "Severe Anomaly (Z-Score + Percentile)",
+        IsP95_Anomaly and IsIQR_ModerateAnomaly, "Moderate Anomaly (IQR + Percentile)",
+        IsZScoreAnomaly, "Statistical Anomaly (Z-Score)",
+        IsIQR_ModerateAnomaly, "Distribution Anomaly (IQR)",
+        "Normal Variation"
+    )
+| where AnomalyScore >= 20  // Filter to show only meaningful anomalies
+| project 
+    TimeGenerated,
+    Source,
+    CurrentCount = Count,
+    BaselineMean = round(Mean, 2),
+    BaselineMedian = round(Median, 2),
+    StdDev = round(StdDev, 2),
+    ZScore,
+    AnomalyScore,
+    AnomalySeverity,
+    AnomalyType,
+    DeviationFromMean = round(DeviationFromMean, 2),
+    DeviationPct,
+    P95 = round(P95, 2),
+    P99 = round(P99, 2),
+    TriggeredMethods = strcat(
+        iff(IsZScoreAnomaly, "Z-Score ", ""),
+        iff(IsIQR_SevereAnomaly, "IQR-Severe ", iff(IsIQR_ModerateAnomaly, "IQR-Moderate ", "")),
+        iff(IsP99_Anomaly, "P99 ", iff(IsP95_Anomaly, "P95 ", ""))
+    )
+| order by AnomalyScore desc, ZScore desc

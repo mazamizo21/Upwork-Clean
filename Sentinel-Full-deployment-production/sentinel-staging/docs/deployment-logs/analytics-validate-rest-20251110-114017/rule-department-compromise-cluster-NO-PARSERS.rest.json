@@ -1,0 +1,1 @@
+ERROR: Bad Request({"error":{"message":"The request had some invalid properties","code":"BadArgumentError","correlationId":"83d75f6a-d92d-424d-a9b2-bf64a125effc","innererror":{"code":"SemanticError","message":"A semantic error occurred.","innererror":{"code":"SEM0002","message":"No tabular expression statement found"}}}})

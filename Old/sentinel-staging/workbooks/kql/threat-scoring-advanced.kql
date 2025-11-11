@@ -1,0 +1,136 @@
+// ADVANCED THREAT SCORING ALGORITHM
+// Multi-factor scoring: recency, risk level, velocity, persistence, relationships
+// Innovation: Uses composite scoring with weighted factors + anomaly detection
+
+let ScoringWindow = {TimeRange:start} .. {TimeRange:end};
+
+// === CYREN MALWARE INFRASTRUCTURE SCORING ===
+let CyrenThreats = Cyren_MalwareUrls_CL
+| where TimeGenerated {TimeRange}
+| extend payload = parse_json(payload_s)
+| extend 
+    LastSeen = todatetime(payload.last_seen),
+    FirstSeen = todatetime(payload.first_seen),
+    Category = tostring(parse_json(tostring(payload.detection.category))[0]),
+    Type = tostring(payload.type),
+    Identifier = tostring(payload.identifier),
+    Domain = tostring(payload.domain),
+    Risk = toint(coalesce(payload.risk, 50)),
+    Relationships = parse_json(tostring(payload.relationships))
+| extend 
+    // === TEMPORAL SCORING ===
+    HoursSinceLastSeen = datetime_diff('hour', now(), LastSeen),
+    RecencyScore = case(
+        HoursSinceLastSeen <= 1, 100.0,    // Critical: Active right now
+        HoursSinceLastSeen <= 6, 95.0,     // Very High: Last 6 hours
+        HoursSinceLastSeen <= 24, 85.0,    // High: Last 24 hours
+        HoursSinceLastSeen <= 72, 70.0,    // Medium: Last 3 days
+        50.0                                // Low: Older threats
+    ),
+    // === PERSISTENCE SCORING ===
+    PersistenceDays = datetime_diff('day', LastSeen, FirstSeen),
+    PersistenceScore = case(
+        PersistenceDays >= 30, 100.0,      // Extremely persistent
+        PersistenceDays >= 14, 85.0,       // Very persistent
+        PersistenceDays >= 7, 70.0,        // Persistent
+        PersistenceDays >= 3, 60.0,        // Somewhat persistent
+        40.0                                // New threat
+    ),
+    // === RELATIONSHIP SCORING ===
+    RelationshipCount = array_length(Relationships),
+    RelationshipScore = case(
+        RelationshipCount >= 10, 100.0,    // Highly connected infrastructure
+        RelationshipCount >= 5, 80.0,      // Well connected
+        RelationshipCount >= 2, 60.0,      // Some connections
+        40.0                                // Isolated
+    ),
+    // === RISK WEIGHTING ===
+    RiskScore = todouble(Risk),
+    // === COMPOSITE THREAT SCORE ===
+    // Innovation: Weighted multi-factor algorithm
+    ThreatScore = 
+        (RecencyScore * 0.35) +            // 35% weight on recency
+        (PersistenceScore * 0.20) +        // 20% weight on persistence
+        (RiskScore * 0.30) +               // 30% weight on risk level
+        (RelationshipScore * 0.15),        // 15% weight on relationships
+    Source = "Cyren",
+    ThreatType = "Malware Infrastructure"
+| project 
+    TimeGenerated, Identifier, Type, Category, Domain,
+    ThreatScore, RecencyScore, PersistenceScore, RiskScore, RelationshipScore,
+    HoursSinceLastSeen, PersistenceDays, RelationshipCount,
+    Source, ThreatType;
+
+// === TACITRED CREDENTIAL COMPROMISE SCORING ===
+let TacitRedThreats = TacitRed_Findings_CL
+| where TimeGenerated {TimeRange}
+| extend 
+    Email = tostring(email_s),
+    Domain = tostring(domain_s),
+    Confidence = todouble(confidence_d),
+    LastSeen = todatetime(lastSeen_t),
+    FirstSeen = todatetime(firstSeen_t),
+    FindingType = tostring(findingType_s),
+    Status = tostring(status_s)
+| extend 
+    // === TEMPORAL SCORING ===
+    HoursSinceLastSeen = datetime_diff('hour', now(), LastSeen),
+    RecencyScore = case(
+        HoursSinceLastSeen <= 1, 100.0,    // Critical: Just compromised
+        HoursSinceLastSeen <= 12, 95.0,    // Very High: Last 12 hours
+        HoursSinceLastSeen <= 48, 80.0,    // High: Last 48 hours
+        HoursSinceLastSeen <= 168, 65.0,   // Medium: Last week
+        40.0                                // Low: Older findings
+    ),
+    // === FRESHNESS SCORING (opposite of persistence - new = bad) ===
+    FindingAgeDays = datetime_diff('day', now(), FirstSeen),
+    FreshnessScore = case(
+        FindingAgeDays <= 1, 100.0,        // Brand new compromise (worst)
+        FindingAgeDays <= 7, 85.0,         // Very fresh
+        FindingAgeDays <= 30, 60.0,        // Recent
+        40.0                                // Older
+    ),
+    // === CONFIDENCE SCORING ===
+    ConfidenceScore = Confidence,
+    // === STATUS SCORING ===
+    StatusScore = case(
+        Status == "active", 100.0,
+        Status == "unresolved", 90.0,
+        Status == "investigating", 70.0,
+        50.0
+    ),
+    // === COMPOSITE THREAT SCORE ===
+    ThreatScore = 
+        (RecencyScore * 0.35) +            // 35% weight on recency
+        (FreshnessScore * 0.25) +          // 25% weight on freshness
+        (ConfidenceScore * 0.25) +         // 25% weight on confidence
+        (StatusScore * 0.15),              // 15% weight on status
+    Source = "TacitRed",
+    ThreatType = "Credential Compromise",
+    RelationshipCount = 0,
+    RelationshipScore = 0.0
+| project 
+    TimeGenerated, Identifier=Email, Type=FindingType, Category=Domain, Domain,
+    ThreatScore, RecencyScore, PersistenceScore=FreshnessScore, 
+    RiskScore=ConfidenceScore, RelationshipScore,
+    HoursSinceLastSeen, PersistenceDays=FindingAgeDays, RelationshipCount,
+    Source, ThreatType;
+
+// === UNION AND ENRICH ===
+union CyrenThreats, TacitRedThreats
+| extend 
+    // Severity classification
+    Severity = case(
+        ThreatScore >= 90, "Critical",
+        ThreatScore >= 75, "High",
+        ThreatScore >= 50, "Medium",
+        "Low"
+    ),
+    // Activity classification
+    ActivityStatus = case(
+        HoursSinceLastSeen <= 1, "🔴 Active Now",
+        HoursSinceLastSeen <= 24, "🟠 Active (24h)",
+        HoursSinceLastSeen <= 72, "🟡 Recent (72h)",
+        "⚪ Historical"
+    )
+| order by ThreatScore desc, TimeGenerated desc

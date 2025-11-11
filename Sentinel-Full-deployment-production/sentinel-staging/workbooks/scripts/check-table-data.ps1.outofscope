@@ -1,0 +1,67 @@
+#!/usr/bin/env pwsh
+#Requires -Version 7.0
+
+param(
+  [Parameter(Mandatory=$true)]
+  [string]$ConfigFile
+)
+
+$ErrorActionPreference = 'Stop'
+
+$config = Get-Content $ConfigFile | ConvertFrom-Json
+$sub = $config.parameters.azure.value.subscriptionId
+$rg  = $config.parameters.azure.value.resourceGroupName
+$ws  = $config.parameters.azure.value.workspaceName
+
+Write-Host "`n═══ CHECKING TABLE DATA ═══`n" -ForegroundColor Cyan
+
+az account set --subscription $sub
+$wsGuid = az monitor log-analytics workspace show -g $rg -n $ws --query customerId -o tsv
+
+Write-Host "Workspace GUID: $wsGuid`n" -ForegroundColor Gray
+
+# Check Cyren table
+Write-Host "Checking Cyren_Indicators_CL..." -ForegroundColor Yellow
+$cyrenQuery = "Cyren_Indicators_CL | summarize Count=count(), FirstRecord=min(TimeGenerated), LastRecord=max(TimeGenerated)"
+$cyrenResult = az monitor log-analytics query --workspace $wsGuid --analytics-query $cyrenQuery --timespan P30D -o json 2>&1
+
+if($LASTEXITCODE -eq 0) {
+  $cyrenData = $cyrenResult | ConvertFrom-Json
+  if($cyrenData.tables[0].rows.Count -gt 0) {
+    $row = $cyrenData.tables[0].rows[0]
+    Write-Host "  ✓ Cyren table has data!" -ForegroundColor Green
+    Write-Host "    Count: $($row[0])" -ForegroundColor White
+    Write-Host "    First: $($row[1])" -ForegroundColor White
+    Write-Host "    Last:  $($row[2])" -ForegroundColor White
+  } else {
+    Write-Host "  ⚠ Cyren table is EMPTY (no data yet)" -ForegroundColor Yellow
+  }
+} else {
+  Write-Host "  ✗ Query failed or table doesn't exist" -ForegroundColor Red
+}
+
+# Check TacitRed table
+Write-Host "`nChecking TacitRed_Findings_CL..." -ForegroundColor Yellow
+$tacitQuery = "TacitRed_Findings_CL | summarize Count=count(), FirstRecord=min(TimeGenerated), LastRecord=max(TimeGenerated)"
+$tacitResult = az monitor log-analytics query --workspace $wsGuid --analytics-query $tacitQuery --timespan P30D -o json 2>&1
+
+if($LASTEXITCODE -eq 0) {
+  $tacitData = $tacitResult | ConvertFrom-Json
+  if($tacitData.tables[0].rows.Count -gt 0) {
+    $row = $tacitData.tables[0].rows[0]
+    Write-Host "  ✓ TacitRed table has data!" -ForegroundColor Green
+    Write-Host "    Count: $($row[0])" -ForegroundColor White
+    Write-Host "    First: $($row[1])" -ForegroundColor White
+    Write-Host "    Last:  $($row[2])" -ForegroundColor White
+  } else {
+    Write-Host "  ⚠ TacitRed table is EMPTY (no data yet)" -ForegroundColor Yellow
+  }
+} else {
+  Write-Host "  ✗ Query failed or table doesn't exist" -ForegroundColor Red
+}
+
+Write-Host "`n═══ SUMMARY ═══`n" -ForegroundColor Cyan
+Write-Host "If tables are empty, Logic Apps need to run first (1-6 hours)." -ForegroundColor Gray
+Write-Host "Check Logic App run history in Azure Portal:`n" -ForegroundColor Gray
+Write-Host "  Resource Group: $rg" -ForegroundColor White
+Write-Host "  Logic Apps: logicapp-cyren-ip-reputation, logicapp-cyren-malware-urls`n" -ForegroundColor White

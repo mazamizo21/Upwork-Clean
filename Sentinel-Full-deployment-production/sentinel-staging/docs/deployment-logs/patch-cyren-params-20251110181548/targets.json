@@ -1,0 +1,14 @@
+[
+  {
+    "logicApp": "logic-cyren-ip-reputation",
+    "dceEndpoint": "https://dce-sentinel-ti-t0rl.eastus-1.ingest.monitor.azure.com",
+    "dcrImmutableId": "dcr-d55247f315744d3cbfcd959364cbeb01",
+    "streamName": "Custom-Cyren_IpReputation_Raw"
+  },
+  {
+    "logicApp": "logic-cyren-malware-urls",
+    "dceEndpoint": "https://dce-sentinel-ti-t0rl.eastus-1.ingest.monitor.azure.com",
+    "dcrImmutableId": "dcr-61402849b2b8450994d5f96845ea3d61",
+    "streamName": "Custom-Cyren_MalwareUrls_Raw"
+  }
+]

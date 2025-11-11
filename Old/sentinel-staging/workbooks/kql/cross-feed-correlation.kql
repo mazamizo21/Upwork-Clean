@@ -1,0 +1,139 @@
+// CROSS-FEED CORRELATION ANALYSIS
+// Innovation: Advanced multi-source threat correlation
+// Identifies overlapping indicators between Cyren and TacitRed data sources
+
+let correlationWindow = {TimeRange:start} .. {TimeRange:end};
+
+// === EXTRACT DOMAINS FROM CYREN ===
+let CyrenDomains = Cyren_MalwareUrls_CL
+| where TimeGenerated {TimeRange}
+| extend payload = parse_json(payload_s)
+| extend 
+    Domain = tolower(tostring(coalesce(
+        payload.domain,
+        extract(@"://([^/]+)", 1, tostring(payload.url))
+    ))),
+    URL = tostring(payload.url),
+    Category = tostring(parse_json(tostring(payload.detection.category))[0]),
+    Risk = toint(coalesce(payload.risk, 50)),
+    LastSeen = todatetime(payload.last_seen),
+    FirstSeen = todatetime(payload.first_seen)
+| where isnotempty(Domain)
+| summarize 
+    CyrenDetections = count(),
+    CyrenCategories = make_set(Category),
+    CyrenURLs = make_set(URL, 5),  // Keep up to 5 URLs
+    CyrenMaxRisk = max(Risk),
+    CyrenFirstSeen = min(FirstSeen),
+    CyrenLastSeen = max(LastSeen)
+    by Domain;
+
+// === EXTRACT DOMAINS FROM TACITRED ===
+let TacitRedDomains = TacitRed_Findings_CL
+| where TimeGenerated {TimeRange}
+| extend 
+    Email = tostring(email_s),
+    Domain = tolower(tostring(domain_s)),
+    FindingType = tostring(findingType_s),
+    Confidence = todouble(confidence_d),
+    LastSeen = todatetime(lastSeen_t),
+    FirstSeen = todatetime(firstSeen_t)
+| where isnotempty(Domain)
+| summarize 
+    TacitRedDetections = count(),
+    CompromisedAccounts = make_set(Email, 10),  // Keep up to 10 accounts
+    FindingTypes = make_set(FindingType),
+    TacitRedMaxConfidence = max(Confidence),
+    TacitRedFirstSeen = min(FirstSeen),
+    TacitRedLastSeen = max(LastSeen)
+    by Domain;
+
+// === JOIN AND CORRELATE ===
+CyrenDomains
+| join kind=inner (TacitRedDomains) on Domain
+| extend 
+    // === TEMPORAL CORRELATION ===
+    // Calculate time gap between first detections in each source
+    CorrelationTimeGapHours = datetime_diff('hour', CyrenFirstSeen, TacitRedFirstSeen),
+    
+    // === ACTIVITY OVERLAP ===
+    // Check if threats are actively seen in both sources
+    BothActiveNow = 
+        (datetime_diff('hour', now(), CyrenLastSeen) <= 48) and
+        (datetime_diff('hour', now(), TacitRedLastSeen) <= 48),
+    
+    // === CORRELATION STRENGTH ===
+    // Innovation: Multi-factor correlation scoring
+    CorrelationStrength = 
+        // Factor 1: Temporal proximity (max 30 points)
+        (iff(abs(CorrelationTimeGapHours) <= 24, 30,
+         iff(abs(CorrelationTimeGapHours) <= 72, 20,
+         iff(abs(CorrelationTimeGapHours) <= 168, 10, 0)))) +
+        // Factor 2: Detection volume (max 25 points)
+        (iff(CyrenDetections >= 10 and TacitRedDetections >= 10, 25,
+         iff(CyrenDetections >= 5 and TacitRedDetections >= 5, 15,
+         iff(CyrenDetections >= 2 and TacitRedDetections >= 2, 10, 5)))) +
+        // Factor 3: Risk/confidence levels (max 25 points)
+        (iff(CyrenMaxRisk >= 80 and TacitRedMaxConfidence >= 90, 25,
+         iff(CyrenMaxRisk >= 60 and TacitRedMaxConfidence >= 75, 15, 5))) +
+        // Factor 4: Both currently active (max 20 points)
+        (iff(BothActiveNow, 20, 0)),
+    
+    // === THREAT IMPACT SCORE ===
+    // Combined impact assessment
+    ThreatImpact = case(
+        BothActiveNow and CyrenMaxRisk >= 80 and TacitRedMaxConfidence >= 90, 
+            "🔴 Critical - Active Campaign",
+        BothActiveNow and (CyrenMaxRisk >= 60 or TacitRedMaxConfidence >= 80),
+            "🟠 High - Active Threat",
+        CorrelationStrength >= 60,
+            "🟡 Medium - Strong Correlation",
+        "🟢 Low - Weak Correlation"
+    ),
+    
+    // === ATTACK PATTERN ===
+    // Infer attack pattern from correlation
+    AttackPattern = case(
+        CorrelationTimeGapHours >= -24 and CorrelationTimeGapHours <= 24,
+            "Coordinated Attack (Simultaneous)",
+        CorrelationTimeGapHours < -24,
+            "Infrastructure-First (Malware before Credentials)",
+        CorrelationTimeGapHours > 24,
+            "Credentials-First (Phishing before Malware)",
+        "Unknown Pattern"
+    ),
+    
+    // === CAMPAIGN INDICATORS ===
+    IsCampaign = (
+        (CyrenDetections >= 5 and TacitRedDetections >= 3) or
+        (CorrelationStrength >= 70) or
+        (BothActiveNow and abs(CorrelationTimeGapHours) <= 72)
+    )
+| project 
+    Domain,
+    CorrelationStrength,
+    ThreatImpact,
+    AttackPattern,
+    IsCampaign,
+    // Cyren metrics
+    CyrenDetections,
+    CyrenMaxRisk,
+    CyrenCategories = strcat_array(CyrenCategories, ", "),
+    CyrenFirstSeen,
+    CyrenLastSeen,
+    CyrenSampleURLs = strcat_array(CyrenURLs, " | "),
+    // TacitRed metrics
+    TacitRedDetections,
+    CompromisedAccountCount = array_length(CompromisedAccounts),
+    TacitRedMaxConfidence,
+    FindingTypes = strcat_array(FindingTypes, ", "),
+    TacitRedFirstSeen,
+    TacitRedLastSeen,
+    SampleAccounts = strcat_array(array_slice(CompromisedAccounts, 0, 3), ", "),
+    // Correlation metrics
+    CorrelationTimeGapHours,
+    BothActiveNow,
+    // Timing analysis
+    CyrenActivityDuration = datetime_diff('day', CyrenLastSeen, CyrenFirstSeen),
+    TacitRedActivityDuration = datetime_diff('day', TacitRedLastSeen, TacitRedFirstSeen)
+| order by CorrelationStrength desc, CyrenDetections desc, TacitRedDetections desc

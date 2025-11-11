@@ -1,0 +1,56 @@
+// Analytics Rule: High-Risk User Compromised
+// Detects when a user with risky sign-ins is also found in TacitRed compromised credentials
+// Correlates TacitRed findings with Entra ID risky sign-ins
+// Severity: High
+// Tactics: Credential Access, Initial Access
+// Frequency: 1 hour
+// Query Period: 7 days
+
+let lookbackPeriod = 7d;
+// Get TacitRed compromised users
+let CompromisedUsers = parser_tacitred_findings()
+    | where TimeGenerated >= ago(lookbackPeriod)
+    | where IsRecent == true
+    | summarize 
+        TacitRedFindings = count(),
+        LatestCompromise = max(LastSeen),
+        FindingTypes = make_set(FindingType),
+        AvgConfidence = avg(Confidence)
+        by Email;
+// Get Entra ID risky sign-ins
+let RiskySignIns = SigninLogs
+    | where TimeGenerated >= ago(lookbackPeriod)
+    | where RiskLevelDuringSignIn in ("high", "medium")
+    | summarize 
+        RiskySignInCount = count(),
+        LatestRiskySignIn = max(TimeGenerated),
+        RiskLevels = make_set(RiskLevelDuringSignIn),
+        RiskDetails = make_set(RiskDetail),
+        IPAddresses = make_set(IPAddress),
+        Locations = make_set(Location)
+        by UserPrincipalName;
+// Correlate compromised users with risky sign-ins
+CompromisedUsers
+| join kind=inner (RiskySignIns) on $left.Email == $right.UserPrincipalName
+| extend
+    TimeBetweenEvents = datetime_diff('hour', LatestRiskySignIn, LatestCompromise),
+    Severity = case(
+        RiskLevels has "high" and AvgConfidence >= 80, "Critical",
+        RiskLevels has "high" or AvgConfidence >= 80, "High",
+        "Medium"
+    )
+| project
+    Email,
+    Severity,
+    TacitRedFindings,
+    LatestCompromise,
+    RiskySignInCount,
+    LatestRiskySignIn,
+    TimeBetweenEvents,
+    FindingTypes,
+    AvgConfidence,
+    RiskLevels,
+    RiskDetails,
+    IPAddresses,
+    Locations
+| order by Severity desc, LatestRiskySignIn desc

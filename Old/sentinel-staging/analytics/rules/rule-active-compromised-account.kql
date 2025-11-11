@@ -1,0 +1,64 @@
+// Analytics Rule: Active Compromised Account
+// Detects compromised users who still have active/enabled accounts in Entra ID
+// Requires Entra ID user data enrichment
+// Severity: High
+// Tactics: Persistence, Credential Access
+// Frequency: 6 hours
+// Query Period: 30 days
+
+let lookbackPeriod = 30d;
+// Get recent TacitRed compromised users
+let CompromisedUsers = parser_tacitred_findings()
+    | where TimeGenerated >= ago(lookbackPeriod)
+    | summarize 
+        CompromiseCount = count(),
+        FirstCompromise = min(FirstSeen),
+        LatestCompromise = max(LastSeen),
+        FindingTypes = make_set(FindingType),
+        AvgConfidence = avg(Confidence),
+        Domains = make_set(Domain)
+        by Email;
+// Get Entra ID user status (from enrichment table or IdentityInfo)
+let ActiveUsers = IdentityInfo
+    | where TimeGenerated >= ago(1d) // Get latest user status
+    | where AccountEnabled == true
+    | summarize arg_max(TimeGenerated, *) by AccountUPN
+    | project 
+        AccountUPN,
+        AccountEnabled,
+        Department,
+        JobTitle,
+        Manager,
+        LastSeenDate = TimeGenerated;
+// Correlate compromised users with active accounts
+CompromisedUsers
+| join kind=inner (ActiveUsers) on $left.Email == $right.AccountUPN
+| extend
+    DaysSinceCompromise = datetime_diff('day', now(), LatestCompromise),
+    Severity = case(
+        DaysSinceCompromise <= 7 and AvgConfidence >= 80, "Critical",
+        DaysSinceCompromise <= 7, "High",
+        DaysSinceCompromise <= 30, "Medium",
+        "Low"
+    ),
+    RiskReason = strcat(
+        "User compromised ", DaysSinceCompromise, " days ago but account is still enabled. ",
+        "Compromise count: ", CompromiseCount, ". ",
+        "Average confidence: ", round(AvgConfidence, 0), "%"
+    )
+| project
+    Email = AccountUPN,
+    Severity,
+    AccountEnabled,
+    CompromiseCount,
+    FirstCompromise,
+    LatestCompromise,
+    DaysSinceCompromise,
+    AvgConfidence,
+    FindingTypes,
+    Domains,
+    Department,
+    JobTitle,
+    Manager,
+    RiskReason
+| order by Severity desc, DaysSinceCompromise asc

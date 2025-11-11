@@ -1,0 +1,50 @@
+{
+  "tables": [
+    {
+      "columns": [
+        {
+          "name": "Department",
+          "type": "string"
+        },
+        {
+          "name": "Severity",
+          "type": "string"
+        },
+        {
+          "name": "AffectedUserCount",
+          "type": "long"
+        },
+        {
+          "name": "TotalCompromises",
+          "type": "long"
+        },
+        {
+          "name": "FirstCompromise",
+          "type": "datetime"
+        },
+        {
+          "name": "LatestCompromise",
+          "type": "datetime"
+        },
+        {
+          "name": "CompromiseWindow",
+          "type": "long"
+        },
+        {
+          "name": "AvgConfidence",
+          "type": "real"
+        },
+        {
+          "name": "FindingTypes",
+          "type": "dynamic"
+        },
+        {
+          "name": "ThreatDescription",
+          "type": "string"
+        }
+      ],
+      "name": "PrimaryResult",
+      "rows": []
+    }
+  ]
+}

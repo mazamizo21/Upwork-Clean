@@ -1,0 +1,41 @@
+// Analytics Rule: Repeat Compromise Detection
+// Detects users who have been compromised multiple times within a 7-day window
+// Severity: High
+// Tactics: Credential Access, Initial Access
+// Frequency: 1 hour
+// Query Period: 7 days
+
+let lookbackPeriod = 7d;
+let threshold = 2; // Alert if user compromised 2+ times
+parser_tacitred_findings()
+| where TimeGenerated >= ago(lookbackPeriod)
+| summarize 
+    CompromiseCount = count(),
+    FindingTypes = make_set(FindingType),
+    FirstCompromise = min(FirstSeen),
+    LatestCompromise = max(LastSeen),
+    AverageConfidence = avg(Confidence),
+    Domains = make_set(Domain),
+    AllNotes = make_list(Notes)
+    by Email, Username
+| where CompromiseCount >= threshold
+| extend
+    CompromiseWindow = datetime_diff('day', LatestCompromise, FirstCompromise),
+    Severity = case(
+        CompromiseCount >= 5, "Critical",
+        CompromiseCount >= 3, "High",
+        "Medium"
+    )
+| project
+    Email,
+    Username,
+    CompromiseCount,
+    Severity,
+    FirstCompromise,
+    LatestCompromise,
+    CompromiseWindow,
+    AverageConfidence,
+    FindingTypes,
+    Domains,
+    AllNotes
+| order by CompromiseCount desc, LatestCompromise desc

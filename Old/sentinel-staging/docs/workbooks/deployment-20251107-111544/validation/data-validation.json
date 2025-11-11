@@ -1,0 +1,14 @@
+[
+  {
+    "LastEntry": "2025-11-06T23:53:59.2085064Z",
+    "RowCount": "200",
+    "HasData": true,
+    "Table": "Cyren_MalwareUrls_CL"
+  },
+  {
+    "LastEntry": "2025-11-07T16:01:46.1831056Z",
+    "RowCount": "22000",
+    "HasData": true,
+    "Table": "TacitRed_Findings_CL"
+  }
+]

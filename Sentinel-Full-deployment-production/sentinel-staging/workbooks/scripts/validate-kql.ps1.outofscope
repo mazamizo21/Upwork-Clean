@@ -1,0 +1,65 @@
+#!/usr/bin/env pwsh
+#Requires -Version 7.0
+
+param(
+  [Parameter(Mandatory=$true)]
+  [string]$ConfigFile
+)
+
+$ErrorActionPreference = 'Stop'
+$ts = Get-Date -Format 'yyyyMMdd-HHmmss'
+$logDir = Join-Path -Path '.\docs\deployment-logs' -ChildPath "kql-$ts"
+New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+Start-Transcript -Path (Join-Path $logDir 'transcript.log') | Out-Null
+
+try {
+  $config = Get-Content $ConfigFile | ConvertFrom-Json
+  $sub = $config.parameters.azure.value.subscriptionId
+  $rg  = $config.parameters.azure.value.resourceGroupName
+  $ws  = $config.parameters.azure.value.workspaceName
+
+  Write-Host "Setting subscription: $sub" -ForegroundColor Gray
+  az account set --subscription $sub
+
+  Write-Host "Resolving workspace GUID for $rg/$ws" -ForegroundColor Gray
+  $wsGuid = az monitor log-analytics workspace show -g $rg -n $ws --query customerId -o tsv
+  if([string]::IsNullOrWhiteSpace($wsGuid)) { throw "Workspace GUID could not be resolved" }
+  Write-Host "Workspace GUID: $wsGuid" -ForegroundColor Gray
+
+  # --- Query 1: Cyren overall ---
+  $q1 = @'
+Cyren_Indicators_CL
+| where TimeGenerated >= ago(7d)
+| summarize Total=count(), MaxRisk=max(toint(risk_d))
+'@
+  Write-Host "Running KQL #1 (Cyren overall)..." -ForegroundColor Yellow
+  az monitor log-analytics query --workspace $wsGuid --analytics-query $q1 --timespan P7D -o table |
+    Tee-Object (Join-Path $logDir 'kql-cyren-overall.txt') | Out-Null
+
+  # --- Query 2: Command Center timeline ---
+  $q2 = @'
+union withsource=TableName Cyren_Indicators_CL, TacitRed_Findings_CL
+| where TimeGenerated >= ago(24h)
+| extend Source = case(TableName == "Cyren_Indicators_CL", "Cyren", "TacitRed"),
+         ThreatScore = toint(coalesce(risk_d, confidence_d, 50))
+| summarize AvgThreatScore=avg(ThreatScore), Count=count() by bin(TimeGenerated, 1h), Source
+| order by TimeGenerated asc
+'@
+  Write-Host "Running KQL #2 (Timeline)..." -ForegroundColor Yellow
+  az monitor log-analytics query --workspace $wsGuid --analytics-query $q2 --timespan P1D -o table |
+    Tee-Object (Join-Path $logDir 'kql-command-center-timeline.txt') | Out-Null
+
+  # --- Query 3: TacitRed reuse ---
+  $q3 = @'
+TacitRed_Findings_CL
+| where TimeGenerated >= ago(7d)
+| summarize FindingCount=count(), UniqueDomains=dcount(domain_s)
+'@
+  Write-Host "Running KQL #3 (TacitRed reuse)..." -ForegroundColor Yellow
+  az monitor log-analytics query --workspace $wsGuid --analytics-query $q3 --timespan P7D -o table |
+    Tee-Object (Join-Path $logDir 'kql-tacitred-reuse.txt') | Out-Null
+}
+finally {
+  Stop-Transcript | Out-Null
+  Write-Host "Logs archived to: $logDir" -ForegroundColor Cyan
+}

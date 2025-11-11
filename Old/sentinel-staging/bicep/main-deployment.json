@@ -1,0 +1,2306 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.33.93.31351",
+      "templateHash": "11384190856907224074"
+    }
+  },
+  "parameters": {
+    "parametersFile": {
+      "type": "string",
+      "defaultValue": "./parameters.bicep",
+      "metadata": {
+        "description": "Solution parameters file"
+      }
+    },
+    "deploymentTimestamp": {
+      "type": "string",
+      "defaultValue": "[utcNow()]",
+      "metadata": {
+        "description": "Deployment timestamp"
+      }
+    },
+    "workspaceResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Target Log Analytics workspace resource ID"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location"
+      }
+    },
+    "cyrenApiBaseUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "Cyren API base URL"
+      }
+    },
+    "cyrenApiToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Cyren API token"
+      }
+    },
+    "tacitRedApiBaseUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "TacitRed API base URL"
+      }
+    },
+    "tacitRedApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "TacitRed API key"
+      }
+    },
+    "enableCyren": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable Cyren connector deployment"
+      }
+    },
+    "enableAnalytics": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable analytics rules"
+      }
+    },
+    "enablePlaybooks": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable playbooks"
+      }
+    },
+    "enableIpEnrichment": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable IP enrichment"
+      }
+    },
+    "enrichmentProvider": {
+      "type": "string",
+      "defaultValue": "DefenderTI",
+      "allowedValues": [
+        "DefenderTI",
+        "ip-api",
+        "ipinfo",
+        "MaxMind"
+      ],
+      "metadata": {
+        "description": "IP enrichment provider"
+      }
+    },
+    "requireApproval": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Require approval for containment actions"
+      }
+    },
+    "resourceTags": {
+      "type": "object",
+      "defaultValue": {
+        "Solution": "Sentinel-ThreatIntel-CCF",
+        "ManagedBy": "Bicep"
+      },
+      "metadata": {
+        "description": "Tags for all resources"
+      }
+    }
+  },
+  "variables": {
+    "workspaceName": "[last(split(parameters('workspaceResourceId'), '/'))]",
+    "workspaceSubscriptionId": "[split(parameters('workspaceResourceId'), '/')[2]]",
+    "workspaceResourceGroup": "[split(parameters('workspaceResourceId'), '/')[4]]"
+  },
+  "resources": [
+    {
+      "condition": "[parameters('enableCyren')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "deploy-dcr-cyren",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "dcrName": {
+            "value": "dcr-cyren-indicators"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "workspaceResourceId": {
+            "value": "[parameters('workspaceResourceId')]"
+          },
+          "streamName": {
+            "value": "Custom-Cyren_Indicators_CL"
+          },
+          "tags": {
+            "value": "[parameters('resourceTags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.33.93.31351",
+              "templateHash": "6864300265792762008"
+            }
+          },
+          "parameters": {
+            "dcrName": {
+              "type": "string",
+              "defaultValue": "dcr-cyren-indicators",
+              "metadata": {
+                "description": "DCR name"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "DCR location"
+              }
+            },
+            "workspaceResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Target Log Analytics workspace resource ID"
+              }
+            },
+            "streamName": {
+              "type": "string",
+              "defaultValue": "Custom-Cyren_Indicators_CL",
+              "metadata": {
+                "description": "Stream name for custom table"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Tags for the resource"
+              }
+            }
+          },
+          "variables": {
+            "$fxv#0": "// DCR Transformation for Cyren Indicators\r\n// Maps Cyren API JSON response to Cyren_Indicators_CL table schema\r\n// Reference: Based on malware_url_snippet and iprep_snippet customer samples\r\n\r\nsource\r\n// Extract basic indicator fields\r\n| extend url_s = tostring(url)\r\n| extend type_s = tostring(['type'])\r\n| extend identifier_s = tostring(identifier)\r\n\r\n// Parse detection information\r\n| extend category_s = tostring(detection.category[0])\r\n| extend detection_ts_t = todatetime(detection.detection_ts)\r\n| extend risk_d = toint(detection.risk)\r\n\r\n// Parse metadata\r\n| extend protocol_s = tostring(meta.protocol)\r\n| extend port_d = toint(meta.port)\r\n| extend object_type_s = tostring(meta.object_type)\r\n\r\n// Parse timestamps\r\n| extend firstSeen_t = todatetime(first_seen)\r\n| extend lastSeen_t = todatetime(last_seen)\r\n\r\n// Extract IP and domain from different field types\r\n| extend ip_s = case(\r\n    ['type'] == 'ip', tostring(identifier),\r\n    isnotempty(tostring(meta.ip_address)), tostring(meta.ip_address),\r\n    ''\r\n)\r\n\r\n// Extract domain - from URL if type is url, or from domain field\r\n| extend domain_s = case(\r\n    ['type'] == 'url' and isnotempty(url), extract(@'://([^/:]+)', 1, tostring(url)),\r\n    ['type'] == 'domain', tostring(identifier),\r\n    isnotempty(tostring(domain)), tostring(domain),\r\n    ''\r\n)\r\n\r\n// Extract file hash\r\n| extend fileHash_s = case(\r\n    ['type'] == 'file', tostring(identifier),\r\n    ''\r\n)\r\n\r\n// Parse relationships as JSON string for storage\r\n| extend relationships_s = tostring(relationships)\r\n\r\n// Parse detection methods array\r\n| extend detection_methods_s = tostring(detection_methods)\r\n\r\n// Extract action field (+, =, -)\r\n| extend action_s = tostring(action)\r\n\r\n// Add source identifier\r\n| extend source_s = 'Cyren'\r\n\r\n// Project final schema matching Cyren_Indicators_CL table\r\n| project \r\n    TimeGenerated = now(),\r\n    url_s,\r\n    ip_s,\r\n    fileHash_s,\r\n    domain_s,\r\n    protocol_s,\r\n    port_d,\r\n    category_s,\r\n    risk_d,\r\n    firstSeen_t,\r\n    lastSeen_t,\r\n    source_s,\r\n    relationships_s,\r\n    detection_methods_s,\r\n    action_s,\r\n    type_s,\r\n    identifier_s,\r\n    detection_ts_t,\r\n    object_type_s\r\n",
+            "workspaceName": "[last(split(parameters('workspaceResourceId'), '/'))]",
+            "workspaceSubscriptionId": "[split(parameters('workspaceResourceId'), '/')[2]]",
+            "workspaceResourceGroup": "[split(parameters('workspaceResourceId'), '/')[4]]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "apiVersion": "2022-06-01",
+              "name": "[parameters('dcrName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "Direct",
+              "properties": {
+                "dataCollectionEndpointId": null,
+                "streamDeclarations": {
+                  "[format('{0}', parameters('streamName'))]": {
+                    "columns": [
+                      {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "url_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "fileHash_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "domain_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "protocol_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "port_d",
+                        "type": "int"
+                      },
+                      {
+                        "name": "category_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "risk_d",
+                        "type": "int"
+                      },
+                      {
+                        "name": "firstSeen_t",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "lastSeen_t",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "source_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "relationships_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "detection_methods_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "action_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "type_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "identifier_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "detection_ts_t",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "object_type_s",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[parameters('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "[parameters('streamName')]"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "[variables('$fxv#0')]",
+                    "outputStream": "[parameters('streamName')]"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.Insights/dataCollectionRules/{0}', parameters('dcrName'))]",
+              "name": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName')), parameters('workspaceResourceId'), 'MonitoringMetricsPublisher')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+                "principalId": "[reference(parameters('workspaceResourceId'), '2022-10-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "dcrId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName'))]"
+            },
+            "dcrImmutableId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName')), '2022-06-01').immutableId]"
+            },
+            "dcrName": {
+              "type": "string",
+              "value": "[parameters('dcrName')]"
+            },
+            "streamName": {
+              "type": "string",
+              "value": "[parameters('streamName')]"
+            },
+            "logsIngestionEndpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName')), '2022-06-01').logsIngestion.endpoint]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "deploy-dcr-tacitred",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "dcrName": {
+            "value": "dcr-tacitred-findings"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "workspaceResourceId": {
+            "value": "[parameters('workspaceResourceId')]"
+          },
+          "streamName": {
+            "value": "Custom-TacitRed_Findings_CL"
+          },
+          "tags": {
+            "value": "[parameters('resourceTags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.33.93.31351",
+              "templateHash": "16134768422967598754"
+            }
+          },
+          "parameters": {
+            "dcrName": {
+              "type": "string",
+              "defaultValue": "dcr-tacitred-findings",
+              "metadata": {
+                "description": "DCR name"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "DCR location"
+              }
+            },
+            "workspaceResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Target Log Analytics workspace resource ID"
+              }
+            },
+            "streamName": {
+              "type": "string",
+              "defaultValue": "Custom-TacitRed_Findings_CL",
+              "metadata": {
+                "description": "Stream name for custom table"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Tags for the resource"
+              }
+            }
+          },
+          "variables": {
+            "$fxv#0": "// DCR Transformation for TacitRed Findings\r\n// Maps TacitRed API JSON response to TacitRed_Findings_CL table schema\r\n\r\nsource\r\n// Extract basic finding fields\r\n| extend email_s = tostring(email)\r\n| extend domain_s = tostring(domain)\r\n| extend findingType_s = tostring(finding_type)\r\n| extend confidence_d = toint(confidence)\r\n\r\n// Parse timestamps\r\n| extend firstSeen_t = todatetime(first_seen)\r\n| extend lastSeen_t = todatetime(last_seen)\r\n| extend detection_ts_t = todatetime(detection_ts)\r\n\r\n// Extract notes/description\r\n| extend notes_s = tostring(coalesce(notes, description, details))\r\n\r\n// Extract additional context fields\r\n| extend severity_s = tostring(severity)\r\n| extend status_s = tostring(status)\r\n| extend campaign_id_s = tostring(campaign_id)\r\n\r\n// Extract affected user details if available\r\n| extend user_id_s = tostring(user_id)\r\n| extend username_s = tostring(username)\r\n\r\n// Parse metadata if present\r\n| extend metadata_s = tostring(metadata)\r\n\r\n// Add source identifier\r\n| extend source_s = 'TacitRed'\r\n\r\n// Project final schema matching TacitRed_Findings_CL table\r\n| project \r\n    TimeGenerated = now(),\r\n    email_s,\r\n    domain_s,\r\n    findingType_s,\r\n    confidence_d,\r\n    firstSeen_t,\r\n    lastSeen_t,\r\n    notes_s,\r\n    source_s,\r\n    severity_s,\r\n    status_s,\r\n    campaign_id_s,\r\n    user_id_s,\r\n    username_s,\r\n    detection_ts_t,\r\n    metadata_s\r\n"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "apiVersion": "2022-06-01",
+              "name": "[parameters('dcrName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "Direct",
+              "properties": {
+                "dataCollectionEndpointId": null,
+                "streamDeclarations": {
+                  "[format('{0}', parameters('streamName'))]": {
+                    "columns": [
+                      {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "email_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "domain_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "findingType_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "confidence_d",
+                        "type": "int"
+                      },
+                      {
+                        "name": "firstSeen_t",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "lastSeen_t",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "notes_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "source_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "severity_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "status_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "campaign_id_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "user_id_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "username_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "detection_ts_t",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "metadata_s",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[parameters('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "[parameters('streamName')]"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "[variables('$fxv#0')]",
+                    "outputStream": "[parameters('streamName')]"
+                  }
+                ]
+              }
+            }
+          ],
+          "outputs": {
+            "dcrId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName'))]"
+            },
+            "dcrImmutableId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName')), '2022-06-01').immutableId]"
+            },
+            "dcrName": {
+              "type": "string",
+              "value": "[parameters('dcrName')]"
+            },
+            "streamName": {
+              "type": "string",
+              "value": "[parameters('streamName')]"
+            },
+            "logsIngestionEndpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName')), '2022-06-01').logsIngestion.endpoint]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "condition": "[parameters('enableCyren')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "deploy-connector-cyren",
+      "subscriptionId": "[variables('workspaceSubscriptionId')]",
+      "resourceGroup": "[variables('workspaceResourceGroup')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "workspaceName": {
+            "value": "[variables('workspaceName')]"
+          },
+          "connectorName": {
+            "value": "ccf-cyren"
+          },
+          "apiBaseUrl": {
+            "value": "[parameters('cyrenApiBaseUrl')]"
+          },
+          "apiToken": {
+            "value": "[parameters('cyrenApiToken')]"
+          },
+          "dcrImmutableId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-dcr-cyren'), '2022-09-01').outputs.dcrImmutableId.value]"
+          },
+          "streamName": {
+            "value": "Custom-Cyren_Indicators_CL"
+          },
+          "queryWindowInMin": {
+            "value": 360
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.33.93.31351",
+              "templateHash": "3804544183924962727"
+            }
+          },
+          "parameters": {
+            "workspaceName": {
+              "type": "string",
+              "metadata": {
+                "description": "Workspace name for Sentinel"
+              }
+            },
+            "connectorName": {
+              "type": "string",
+              "defaultValue": "ccf-cyren",
+              "metadata": {
+                "description": "Connector name"
+              }
+            },
+            "apiBaseUrl": {
+              "type": "string",
+              "metadata": {
+                "description": "Cyren API base URL"
+              }
+            },
+            "apiToken": {
+              "type": "securestring",
+              "metadata": {
+                "description": "Cyren API token (JWT)"
+              }
+            },
+            "dcrImmutableId": {
+              "type": "string",
+              "metadata": {
+                "description": "Immutable ID of Cyren DCR"
+              }
+            },
+            "streamName": {
+              "type": "string",
+              "defaultValue": "Custom-Cyren_Indicators_CL",
+              "metadata": {
+                "description": "Stream name"
+              }
+            },
+            "queryWindowInMin": {
+              "type": "int",
+              "defaultValue": 360,
+              "metadata": {
+                "description": "Polling window in minutes"
+              }
+            },
+            "maximumBatchSize": {
+              "type": "int",
+              "defaultValue": 1000,
+              "metadata": {
+                "description": "Maximum batch size for events"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+              "apiVersion": "2022-12-01-preview",
+              "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('workspaceName'))]",
+              "name": "[format('{0}-definition', parameters('connectorName'))]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[format('{0}-definition', parameters('connectorName'))]",
+                  "title": "Cyren Threat InDepth (CCF)",
+                  "publisher": "Cyren",
+                  "descriptionMarkdown": "Ingest phishing and malware infrastructure indicators including URLs, IPs, domains, and file hashes with relationship data.",
+                  "graphQueriesTableName": "Cyren_Indicators_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total Cyren indicators received",
+                      "legend": "Cyren Indicators",
+                      "baseQuery": "Cyren_Indicators_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All Cyren malware indicators from last 24 hours",
+                      "query": "Cyren_Indicators_CL\\n| where TimeGenerated >= ago(24h)\\n| where category_s == \"malware\"\\n| project TimeGenerated, url_s, ip_s, domain_s, risk_d, lastSeen_t"
+                    },
+                    {
+                      "description": "High-risk indicators (risk >= 70)",
+                      "query": "Cyren_Indicators_CL\\n| where risk_d >= 70\\n| summarize count() by category_s\\n| render piechart"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "Cyren_Indicators_CL",
+                      "lastDataReceivedQuery": "Cyren_Indicators_CL\\n| summarize Time = max(TimeGenerated)\\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors",
+                      "value": []
+                    }
+                  ],
+                  "availability": {
+                    "status": "Available",
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": false
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Cyren API credentials",
+                        "description": "Cyren API JWT token is required for authentication"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Connect Cyren Threat InDepth to Microsoft Sentinel",
+                      "description": "Enter your Cyren API credentials to start ingesting threat indicators",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "enable": "true",
+                            "userRequestPlaceHoldersInput": [
+                              {
+                                "displayText": "Cyren API Base URL",
+                                "requestObjectKey": "apiEndpoint",
+                                "placeHolderName": "{{placeHolder1}}"
+                              }
+                            ]
+                          },
+                          "type": "APIKey"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.SecurityInsights/dataConnectors",
+              "apiVersion": "2023-02-01-preview",
+              "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('workspaceName'))]",
+              "name": "[parameters('connectorName')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "[format('{0}-definition', parameters('connectorName'))]",
+                "dcrConfig": {
+                  "dataCollectionRuleImmutableId": "[parameters('dcrImmutableId')]",
+                  "streamName": "[parameters('streamName')]"
+                },
+                "dataType": "Cyren_Indicators_CL",
+                "auth": {
+                  "type": "APIKey",
+                  "apiKeyName": "Authorization",
+                  "apiKeyIdentifier": "Bearer",
+                  "apiKey": "[parameters('apiToken')]"
+                },
+                "request": {
+                  "apiEndpoint": "[format('{0}/indicators', parameters('apiBaseUrl'))]",
+                  "httpMethod": "Get",
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "queryWindowInMin": "[parameters('queryWindowInMin')]",
+                  "queryParameters": {
+                    "since": "{{queryWindowStartTime}}",
+                    "until": "{{queryWindowEndTime}}"
+                  },
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Microsoft-Sentinel-Cyren-Connector/1.0"
+                  },
+                  "rateLimitQps": 10,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60
+                },
+                "paging": {
+                  "pagingType": "LinkHeader"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ],
+                  "format": "json"
+                },
+                "isActive": true
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', format('{0}-definition', parameters('connectorName')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "connectorId": {
+              "type": "string",
+              "value": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), 'Microsoft.SecurityInsights/dataConnectors', parameters('connectorName'))]"
+            },
+            "connectorName": {
+              "type": "string",
+              "value": "[parameters('connectorName')]"
+            },
+            "dataType": {
+              "type": "string",
+              "value": "Cyren_Indicators_CL"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-dcr-cyren')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "deploy-connector-tacitred",
+      "subscriptionId": "[variables('workspaceSubscriptionId')]",
+      "resourceGroup": "[variables('workspaceResourceGroup')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "workspaceName": {
+            "value": "[variables('workspaceName')]"
+          },
+          "connectorName": {
+            "value": "ccf-tacitred"
+          },
+          "apiBaseUrl": {
+            "value": "[parameters('tacitRedApiBaseUrl')]"
+          },
+          "apiKey": {
+            "value": "[parameters('tacitRedApiKey')]"
+          },
+          "dcrImmutableId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-dcr-tacitred'), '2022-09-01').outputs.dcrImmutableId.value]"
+          },
+          "streamName": {
+            "value": "Custom-TacitRed_Findings_CL"
+          },
+          "queryWindowInMin": {
+            "value": 360
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.33.93.31351",
+              "templateHash": "14413643705354475450"
+            }
+          },
+          "parameters": {
+            "workspaceName": {
+              "type": "string",
+              "metadata": {
+                "description": "Workspace name for Sentinel"
+              }
+            },
+            "connectorName": {
+              "type": "string",
+              "defaultValue": "ccf-tacitred",
+              "metadata": {
+                "description": "Connector name"
+              }
+            },
+            "apiBaseUrl": {
+              "type": "string",
+              "metadata": {
+                "description": "TacitRed API base URL"
+              }
+            },
+            "apiKey": {
+              "type": "securestring",
+              "metadata": {
+                "description": "TacitRed API key"
+              }
+            },
+            "dcrImmutableId": {
+              "type": "string",
+              "metadata": {
+                "description": "Immutable ID of TacitRed DCR"
+              }
+            },
+            "streamName": {
+              "type": "string",
+              "defaultValue": "Custom-TacitRed_Findings_CL",
+              "metadata": {
+                "description": "Stream name"
+              }
+            },
+            "queryWindowInMin": {
+              "type": "int",
+              "defaultValue": 360,
+              "metadata": {
+                "description": "Polling window in minutes"
+              }
+            },
+            "maximumBatchSize": {
+              "type": "int",
+              "defaultValue": 1000,
+              "metadata": {
+                "description": "Maximum batch size for events"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+              "apiVersion": "2022-12-01-preview",
+              "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('workspaceName'))]",
+              "name": "[format('{0}-definition', parameters('connectorName'))]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[format('{0}-definition', parameters('connectorName'))]",
+                  "title": "TacitRed Compromised Credentials (CCF)",
+                  "publisher": "TacitRed",
+                  "descriptionMarkdown": "Ingest compromised email and domain findings including credential leaks, domain takeovers, and identity compromise indicators.",
+                  "graphQueriesTableName": "TacitRed_Findings_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total TacitRed findings received",
+                      "legend": "TacitRed Findings",
+                      "baseQuery": "TacitRed_Findings_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All TacitRed findings from last 7 days",
+                      "query": "TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| project TimeGenerated, email_s, domain_s, findingType_s, confidence_d"
+                    },
+                    {
+                      "description": "Compromised credentials by domain",
+                      "query": "TacitRed_Findings_CL\\n| where findingType_s == \"compromised_credential\"\\n| summarize CompromisedUsers = dcount(email_s) by domain_s\\n| order by CompromisedUsers desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "TacitRed_Findings_CL",
+                      "lastDataReceivedQuery": "TacitRed_Findings_CL\\n| summarize Time = max(TimeGenerated)\\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors",
+                      "value": []
+                    }
+                  ],
+                  "availability": {
+                    "status": "Available",
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": false
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "TacitRed API credentials",
+                        "description": "TacitRed API key is required for authentication"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Connect TacitRed to Microsoft Sentinel",
+                      "description": "Enter your TacitRed API key to start ingesting compromised identity findings",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "enable": "true",
+                            "userRequestPlaceHoldersInput": [
+                              {
+                                "displayText": "TacitRed API Base URL",
+                                "requestObjectKey": "apiEndpoint",
+                                "placeHolderName": "{{placeHolder1}}"
+                              }
+                            ]
+                          },
+                          "type": "APIKey"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.SecurityInsights/dataConnectors",
+              "apiVersion": "2023-02-01-preview",
+              "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('workspaceName'))]",
+              "name": "[parameters('connectorName')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "[format('{0}-definition', parameters('connectorName'))]",
+                "dcrConfig": {
+                  "dataCollectionRuleImmutableId": "[parameters('dcrImmutableId')]",
+                  "streamName": "[parameters('streamName')]"
+                },
+                "dataType": "TacitRed_Findings_CL",
+                "auth": {
+                  "type": "APIKey",
+                  "apiKeyName": "Authorization",
+                  "apiKeyIdentifier": "",
+                  "apiKey": "[parameters('apiKey')]"
+                },
+                "request": {
+                  "apiEndpoint": "[format('{0}/findings', parameters('apiBaseUrl'))]",
+                  "httpMethod": "Get",
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "queryWindowInMin": "[parameters('queryWindowInMin')]",
+                  "queryParameters": {
+                    "since": "{{queryWindowStartTime}}",
+                    "until": "{{queryWindowEndTime}}"
+                  },
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Microsoft-Sentinel-TacitRed-Connector/1.0"
+                  },
+                  "rateLimitQps": 10,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60
+                },
+                "paging": {
+                  "pagingType": "LinkHeader"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.results"
+                  ],
+                  "format": "json"
+                },
+                "isActive": true
+              },
+              "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', format('{0}-definition', parameters('connectorName')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "connectorId": {
+              "type": "string",
+              "value": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), 'Microsoft.SecurityInsights/dataConnectors', parameters('connectorName'))]"
+            },
+            "connectorName": {
+              "type": "string",
+              "value": "[parameters('connectorName')]"
+            },
+            "dataType": {
+              "type": "string",
+              "value": "TacitRed_Findings_CL"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-dcr-tacitred')]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableAnalytics')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "deploy-analytics-rules",
+      "subscriptionId": "[variables('workspaceSubscriptionId')]",
+      "resourceGroup": "[variables('workspaceResourceGroup')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "workspaceName": {
+            "value": "[variables('workspaceName')]"
+          },
+          "enabled": {
+            "value": true
+          },
+          "defaultSeverity": {
+            "value": "Medium"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.33.93.31351",
+              "templateHash": "4489725596257623505"
+            }
+          },
+          "parameters": {
+            "workspaceName": {
+              "type": "string",
+              "metadata": {
+                "description": "Workspace name"
+              }
+            },
+            "enabled": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Enable analytics rules"
+              }
+            },
+            "defaultSeverity": {
+              "type": "string",
+              "defaultValue": "Medium",
+              "allowedValues": [
+                "Informational",
+                "Low",
+                "Medium",
+                "High"
+              ],
+              "metadata": {
+                "description": "Default severity for analytics rules"
+              }
+            },
+            "queryFrequency": {
+              "type": "int",
+              "defaultValue": 360,
+              "metadata": {
+                "description": "Query frequency in minutes"
+              }
+            },
+            "queryPeriod": {
+              "type": "int",
+              "defaultValue": 48,
+              "metadata": {
+                "description": "Query period in hours"
+              }
+            },
+            "triggerThreshold": {
+              "type": "int",
+              "defaultValue": 0,
+              "metadata": {
+                "description": "Trigger threshold"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/alertRules",
+              "apiVersion": "2023-02-01-preview",
+              "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('workspaceName'))]",
+              "name": "[guid('rule-compromised-active-malware', parameters('workspaceName'))]",
+              "kind": "Scheduled",
+              "properties": {
+                "displayName": "TI - Compromised Account with Active Malicious Infrastructure",
+                "description": "Detects compromised accounts (TacitRed) that are associated with domains hosting active malicious infrastructure (Cyren) in the last 48 hours. This indicates the account may be actively used in ongoing attacks.",
+                "severity": "High",
+                "enabled": "[parameters('enabled')]",
+                "query": "parser_tacitred_findings()\r\n| where TimeGenerated >= ago(7d)\r\n| join kind=inner (\r\n    parser_cyren_indicators()\r\n    | where LastSeen >= ago(48h)\r\n    | where RiskScore >= 50\r\n    | where isnotempty(Domain)\r\n) on $left.Domain == $right.Domain\r\n| extend \r\n    AccountName = tostring(split(Email, '@')[0]),\r\n    UPNSuffix = tostring(split(Email, '@')[1])\r\n| project \r\n    TimeGenerated,\r\n    CompromisedEmail = Email,\r\n    CompromisedDomain = Domain,\r\n    FindingType,\r\n    Confidence,\r\n    MaliciousIOC = IOC,\r\n    ThreatType,\r\n    RiskScore,\r\n    ThreatLastSeen = LastSeen1,\r\n    FirstSeenCompromise = FirstSeen,\r\n    CampaignId,\r\n    AccountName,\r\n    UPNSuffix,\r\n    Notes,\r\n    Relationships\r\n",
+                "queryFrequency": "[format('PT{0}M', parameters('queryFrequency'))]",
+                "queryPeriod": "[format('PT{0}H', parameters('queryPeriod'))]",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": "[parameters('triggerThreshold')]",
+                "suppressionDuration": "PT6H",
+                "suppressionEnabled": false,
+                "tactics": [
+                  "CredentialAccess",
+                  "InitialAccess",
+                  "CommandAndControl"
+                ],
+                "techniques": [
+                  "T1078",
+                  "T1566",
+                  "T1071"
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "Account",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Name",
+                        "columnName": "AccountName"
+                      },
+                      {
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "URL",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Url",
+                        "columnName": "MaliciousIOC"
+                      }
+                    ]
+                  }
+                ],
+                "incidentConfiguration": {
+                  "createIncident": true,
+                  "groupingConfiguration": {
+                    "enabled": true,
+                    "reopenClosedIncident": false,
+                    "lookbackDuration": "PT24H",
+                    "matchingMethod": "Selected",
+                    "groupByEntities": [
+                      "Account"
+                    ],
+                    "groupByAlertDetails": [
+                      "DisplayName"
+                    ],
+                    "groupByCustomDetails": []
+                  }
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "Compromised Account {{CompromisedEmail}} linked to active malware infrastructure",
+                  "alertDescriptionFormat": "Account {{CompromisedEmail}} from TacitRed findings is associated with domain {{CompromisedDomain}} which is hosting active malicious infrastructure ({{ThreatType}}) detected by Cyren with risk score {{RiskScore}}. Last malicious activity: {{ThreatLastSeen}}",
+                  "alertSeverityColumnName": "Confidence",
+                  "alertDynamicProperties": [
+                    {
+                      "alertProperty": "AlertLink",
+                      "value": "MaliciousIOC"
+                    },
+                    {
+                      "alertProperty": "ProductName",
+                      "value": "ThreatType"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.SecurityInsights/alertRules",
+              "apiVersion": "2023-02-01-preview",
+              "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('workspaceName'))]",
+              "name": "[guid('rule-repeat-compromise', parameters('workspaceName'))]",
+              "kind": "Scheduled",
+              "properties": {
+                "displayName": "TI - Repeat Account Compromise Detected",
+                "description": "Detects accounts that have been compromised multiple times within 7 days, indicating persistent targeting or insufficient remediation.",
+                "severity": "High",
+                "enabled": "[parameters('enabled')]",
+                "query": "parser_tacitred_findings()\r\n| where TimeGenerated >= ago(7d)\r\n| summarize \r\n    Findings = count(),\r\n    FirstCompromise = min(FirstSeen),\r\n    LastCompromise = max(LastSeen),\r\n    FindingTypes = make_set(FindingType),\r\n    Domains = make_set(Domain),\r\n    AvgConfidence = avg(Confidence),\r\n    CampaignIds = make_set(CampaignId)\r\n    by Email\r\n| where Findings > 1\r\n| extend \r\n    AccountName = tostring(split(Email, '@')[0]),\r\n    UPNSuffix = tostring(split(Email, '@')[1]),\r\n    DaysSinceFirst = datetime_diff('day', now(), FirstCompromise)\r\n| project \r\n    TimeGenerated = now(),\r\n    Email,\r\n    CompromiseCount = Findings,\r\n    FirstCompromise,\r\n    LastCompromise,\r\n    DaysSinceFirst,\r\n    FindingTypes,\r\n    Domains,\r\n    AvgConfidence,\r\n    CampaignIds,\r\n    AccountName,\r\n    UPNSuffix\r\n",
+                "queryFrequency": "[format('PT{0}M', parameters('queryFrequency'))]",
+                "queryPeriod": "PT168H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": "[parameters('triggerThreshold')]",
+                "suppressionDuration": "PT6H",
+                "suppressionEnabled": false,
+                "tactics": [
+                  "Persistence",
+                  "CredentialAccess"
+                ],
+                "techniques": [
+                  "T1078",
+                  "T1110"
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "Account",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Name",
+                        "columnName": "AccountName"
+                      },
+                      {
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
+                      }
+                    ]
+                  }
+                ],
+                "incidentConfiguration": {
+                  "createIncident": true,
+                  "groupingConfiguration": {
+                    "enabled": true,
+                    "reopenClosedIncident": true,
+                    "lookbackDuration": "PT168H",
+                    "matchingMethod": "Selected",
+                    "groupByEntities": [
+                      "Account"
+                    ],
+                    "groupByAlertDetails": [],
+                    "groupByCustomDetails": []
+                  }
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "Account {{Email}} compromised {{CompromiseCount}} times in 7 days",
+                  "alertDescriptionFormat": "Account {{Email}} has been compromised {{CompromiseCount}} times between {{FirstCompromise}} and {{LastCompromise}}. Finding types: {{FindingTypes}}. Average confidence: {{AvgConfidence}}. This indicates persistent targeting or insufficient remediation."
+                }
+              }
+            },
+            {
+              "type": "Microsoft.SecurityInsights/alertRules",
+              "apiVersion": "2023-02-01-preview",
+              "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('workspaceName'))]",
+              "name": "[guid('rule-high-risk-relationships', parameters('workspaceName'))]",
+              "kind": "Scheduled",
+              "properties": {
+                "displayName": "TI - High-Risk Indicator with Multiple Threat Relationships",
+                "description": "Detects high-risk Cyren indicators (risk >= 80) that have multiple relationship connections to other malicious entities, indicating sophisticated threat infrastructure.",
+                "severity": "Medium",
+                "enabled": "[parameters('enabled')]",
+                "query": "parser_cyren_indicators()\r\n| where TimeGenerated >= ago(48h)\r\n| where RiskScore >= 80\r\n| where isnotempty(Relationships)\r\n| extend RelationshipCount = array_length(Relationships)\r\n| where RelationshipCount >= 2\r\n| project \r\n    TimeGenerated,\r\n    IOC,\r\n    ThreatType,\r\n    RiskScore,\r\n    FirstSeen,\r\n    LastSeen,\r\n    RelationshipCount,\r\n    Relationships,\r\n    DetectionMethods,\r\n    Domain,\r\n    IP,\r\n    URL\r\n",
+                "queryFrequency": "[format('PT{0}M', parameters('queryFrequency'))]",
+                "queryPeriod": "[format('PT{0}H', parameters('queryPeriod'))]",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": "[parameters('triggerThreshold')]",
+                "suppressionDuration": "PT6H",
+                "suppressionEnabled": false,
+                "tactics": [
+                  "CommandAndControl",
+                  "DefenseEvasion"
+                ],
+                "techniques": [
+                  "T1071",
+                  "T1568"
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "URL",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Url",
+                        "columnName": "IOC"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "IP",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Address",
+                        "columnName": "IP"
+                      }
+                    ]
+                  }
+                ],
+                "incidentConfiguration": {
+                  "createIncident": true,
+                  "groupingConfiguration": {
+                    "enabled": true,
+                    "reopenClosedIncident": false,
+                    "lookbackDuration": "PT48H",
+                    "matchingMethod": "Selected",
+                    "groupByEntities": [],
+                    "groupByAlertDetails": [
+                      "DisplayName"
+                    ],
+                    "groupByCustomDetails": [
+                      {
+                        "customDetailsKey": "Domain",
+                        "detailsValue": "Domain"
+                      }
+                    ]
+                  }
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "High-risk {{ThreatType}} indicator {{IOC}} with {{RelationshipCount}} threat relationships",
+                  "alertDescriptionFormat": "High-risk indicator {{IOC}} (risk score: {{RiskScore}}) detected with {{RelationshipCount}} relationship connections to other malicious entities. This indicates sophisticated threat infrastructure. Threat type: {{ThreatType}}. Last seen: {{LastSeen}}"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.SecurityInsights/alertRules",
+              "apiVersion": "2023-02-01-preview",
+              "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('workspaceName'))]",
+              "name": "[guid('rule-multi-domain-campaign', parameters('workspaceName'))]",
+              "kind": "Scheduled",
+              "properties": {
+                "displayName": "TI - Campaign Spreading Across Multiple Domains",
+                "description": "Detects threat campaigns affecting multiple domains within 24 hours, indicating a widespread attack or coordinated threat activity.",
+                "severity": "[parameters('defaultSeverity')]",
+                "enabled": "[parameters('enabled')]",
+                "query": "parser_tacitred_findings()\r\n| where TimeGenerated >= ago(24h)\r\n| where isnotempty(CampaignId)\r\n| summarize \r\n    AffectedDomains = dcount(Domain),\r\n    Domains = make_set(Domain),\r\n    CompromisedUsers = dcount(Email),\r\n    Users = make_set(Email),\r\n    FindingTypes = make_set(FindingType),\r\n    FirstSeen = min(FirstSeen),\r\n    LastSeen = max(LastSeen),\r\n    AvgConfidence = avg(Confidence)\r\n    by CampaignId\r\n| where AffectedDomains >= 2\r\n| project \r\n    TimeGenerated = now(),\r\n    CampaignId,\r\n    AffectedDomains,\r\n    CompromisedUsers,\r\n    Domains,\r\n    Users,\r\n    FindingTypes,\r\n    FirstSeen,\r\n    LastSeen,\r\n    AvgConfidence\r\n",
+                "queryFrequency": "[format('PT{0}M', parameters('queryFrequency'))]",
+                "queryPeriod": "PT24H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": "[parameters('triggerThreshold')]",
+                "suppressionDuration": "PT6H",
+                "suppressionEnabled": false,
+                "tactics": [
+                  "InitialAccess",
+                  "Collection"
+                ],
+                "techniques": [
+                  "T1566",
+                  "T1114"
+                ],
+                "incidentConfiguration": {
+                  "createIncident": true,
+                  "groupingConfiguration": {
+                    "enabled": true,
+                    "reopenClosedIncident": false,
+                    "lookbackDuration": "PT24H",
+                    "matchingMethod": "Selected",
+                    "groupByEntities": [],
+                    "groupByAlertDetails": [],
+                    "groupByCustomDetails": [
+                      {
+                        "customDetailsKey": "CampaignId",
+                        "detailsValue": "CampaignId"
+                      }
+                    ]
+                  }
+                },
+                "customDetails": {
+                  "CampaignId": "CampaignId",
+                  "AffectedDomains": "AffectedDomains",
+                  "CompromisedUsers": "CompromisedUsers"
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "Campaign {{CampaignId}} affecting {{AffectedDomains}} domains and {{CompromisedUsers}} users",
+                  "alertDescriptionFormat": "Threat campaign {{CampaignId}} detected spreading across {{AffectedDomains}} domains with {{CompromisedUsers}} compromised users. Affected domains: {{Domains}}. Finding types: {{FindingTypes}}. First seen: {{FirstSeen}}, Last seen: {{LastSeen}}"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.SecurityInsights/alertRules",
+              "apiVersion": "2023-02-01-preview",
+              "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('workspaceName'))]",
+              "name": "[guid('rule-new-malware-compromised-domain', parameters('workspaceName'))]",
+              "kind": "Scheduled",
+              "properties": {
+                "displayName": "TI - New Malware Infrastructure on Known Compromised Domain",
+                "description": "Detects when new malicious infrastructure appears on a domain that has known compromised accounts, indicating the domain may be fully compromised and weaponized.",
+                "severity": "High",
+                "enabled": "[parameters('enabled')]",
+                "query": "let CompromisedDomains = parser_tacitred_findings()\r\n    | where TimeGenerated >= ago(30d)\r\n    | distinct Domain;\r\nparser_cyren_indicators()\r\n| where TimeGenerated >= ago(24h)\r\n| where ThreatType in ('malware', 'phishing')\r\n| where isnotempty(Domain)\r\n| where Domain in (CompromisedDomains)\r\n| join kind=inner (\r\n    parser_tacitred_findings()\r\n    | summarize CompromisedUsers = dcount(Email), Users = make_set(Email) by Domain\r\n) on Domain\r\n| project \r\n    TimeGenerated,\r\n    Domain,\r\n    NewThreatIOC = IOC,\r\n    ThreatType,\r\n    RiskScore,\r\n    FirstSeen,\r\n    LastSeen,\r\n    CompromisedUsers,\r\n    Users,\r\n    Relationships,\r\n    DetectionMethods\r\n",
+                "queryFrequency": "[format('PT{0}M', parameters('queryFrequency'))]",
+                "queryPeriod": "PT24H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": "[parameters('triggerThreshold')]",
+                "suppressionDuration": "PT6H",
+                "suppressionEnabled": false,
+                "tactics": [
+                  "ResourceDevelopment",
+                  "CommandAndControl"
+                ],
+                "techniques": [
+                  "T1584",
+                  "T1071"
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "DNS",
+                    "fieldMappings": [
+                      {
+                        "identifier": "DomainName",
+                        "columnName": "Domain"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "URL",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Url",
+                        "columnName": "NewThreatIOC"
+                      }
+                    ]
+                  }
+                ],
+                "incidentConfiguration": {
+                  "createIncident": true,
+                  "groupingConfiguration": {
+                    "enabled": true,
+                    "reopenClosedIncident": false,
+                    "lookbackDuration": "PT48H",
+                    "matchingMethod": "Selected",
+                    "groupByEntities": [
+                      "DNS"
+                    ],
+                    "groupByAlertDetails": [],
+                    "groupByCustomDetails": []
+                  }
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "New {{ThreatType}} infrastructure detected on compromised domain {{Domain}}",
+                  "alertDescriptionFormat": "New malicious infrastructure ({{ThreatType}}) detected on domain {{Domain}} which has {{CompromisedUsers}} compromised accounts. IOC: {{NewThreatIOC}} with risk score {{RiskScore}}. This indicates the domain may be fully compromised and weaponized for attacks."
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "analyticsRulesDeployed": {
+              "type": "array",
+              "value": [
+                "[guid('rule-compromised-active-malware', parameters('workspaceName'))]",
+                "[guid('rule-repeat-compromise', parameters('workspaceName'))]",
+                "[guid('rule-high-risk-relationships', parameters('workspaceName'))]",
+                "[guid('rule-multi-domain-campaign', parameters('workspaceName'))]",
+                "[guid('rule-new-malware-compromised-domain', parameters('workspaceName'))]"
+              ]
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('workspaceSubscriptionId'), variables('workspaceResourceGroup')), 'Microsoft.Resources/deployments', 'deploy-connector-cyren')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('workspaceSubscriptionId'), variables('workspaceResourceGroup')), 'Microsoft.Resources/deployments', 'deploy-connector-tacitred')]"
+      ]
+    },
+    {
+      "condition": "[parameters('enablePlaybooks')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "deploy-playbook-threathunt",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "playbookName": {
+            "value": "PB-ThreatHunt-M365D"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.33.93.31351",
+              "templateHash": "14259146737581857280"
+            }
+          },
+          "parameters": {
+            "playbookName": {
+              "type": "string",
+              "defaultValue": "PB-ThreatHunt-M365D",
+              "metadata": {
+                "description": "Playbook name"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Location for resources"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[format('azuresentinel-{0}', parameters('playbookName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "displayName": "Azure Sentinel Connection",
+                "customParameterValues": {},
+                "api": {
+                  "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuresentinel')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[format('wdatp-{0}', parameters('playbookName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "displayName": "Microsoft Defender Connection",
+                "customParameterValues": {},
+                "api": {
+                  "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'wdatp')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Logic/workflows",
+              "apiVersion": "2019-05-01",
+              "name": "[parameters('playbookName')]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "$connections": {
+                      "defaultValue": {},
+                      "type": "Object"
+                    }
+                  },
+                  "triggers": {
+                    "Microsoft_Sentinel_incident": {
+                      "type": "ApiConnectionWebhook",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "body": {
+                          "callback_url": "@{listCallbackUrl()}"
+                        },
+                        "path": "/incident-creation"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "Get_Incident_Entities": {
+                      "runAfter": {},
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Entities/list",
+                        "body": "@triggerBody()?['object']?['properties']?['relatedEntities']"
+                      }
+                    },
+                    "Initialize_Hunt_Results": {
+                      "runAfter": {
+                        "Get_Incident_Entities": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "HuntResults",
+                            "type": "string",
+                            "value": ""
+                          }
+                        ]
+                      }
+                    },
+                    "Parse_URLs_and_IPs": {
+                      "runAfter": {
+                        "Initialize_Hunt_Results": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Compose",
+                      "inputs": {
+                        "URLs": "@body('Get_Incident_Entities')?['entities']?[?(@.kind == 'Url')]",
+                        "IPs": "@body('Get_Incident_Entities')?['entities']?[?(@.kind == 'Ip')]",
+                        "FileHashes": "@body('Get_Incident_Entities')?['entities']?[?(@.kind == 'FileHash')]"
+                      }
+                    },
+                    "For_Each_URL": {
+                      "foreach": "@outputs('Parse_URLs_and_IPs')?['URLs']",
+                      "actions": {
+                        "Run_Advanced_Hunting_URL": {
+                          "runAfter": {},
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['wdatp']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/api/advancedhunting",
+                            "body": {
+                              "Query": "DeviceNetworkEvents | where Timestamp > ago(30d) | where RemoteUrl has \"@{items('For_Each_URL')?['properties']?['url']}\" | project Timestamp, DeviceName, RemoteUrl, RemoteIP, InitiatingProcessAccountName | take 100"
+                            }
+                          }
+                        },
+                        "Append_URL_Results": {
+                          "runAfter": {
+                            "Run_Advanced_Hunting_URL": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "AppendToStringVariable",
+                          "inputs": {
+                            "name": "HuntResults",
+                            "value": "\\n**URL Hunt Results for @{items('For_Each_URL')?['properties']?['url']}:**\\n@{body('Run_Advanced_Hunting_URL')?['Results']}\\n"
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Parse_URLs_and_IPs": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Foreach"
+                    },
+                    "For_Each_IP": {
+                      "foreach": "@outputs('Parse_URLs_and_IPs')?['IPs']",
+                      "actions": {
+                        "Run_Advanced_Hunting_IP": {
+                          "runAfter": {},
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['wdatp']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/api/advancedhunting",
+                            "body": {
+                              "Query": "DeviceNetworkEvents | where Timestamp > ago(30d) | where RemoteIP == \"@{items('For_Each_IP')?['properties']?['address']}\" | project Timestamp, DeviceName, RemoteUrl, RemoteIP, RemotePort, InitiatingProcessAccountName | take 100"
+                            }
+                          }
+                        },
+                        "Append_IP_Results": {
+                          "runAfter": {
+                            "Run_Advanced_Hunting_IP": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "AppendToStringVariable",
+                          "inputs": {
+                            "name": "HuntResults",
+                            "value": "\\n**IP Hunt Results for @{items('For_Each_IP')?['properties']?['address']}:**\\n@{body('Run_Advanced_Hunting_IP')?['Results']}\\n"
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "For_Each_URL": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Foreach"
+                    },
+                    "Add_Comment_with_Hunt_Results": {
+                      "runAfter": {
+                        "For_Each_IP": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "**Microsoft 365 Defender Threat Hunting Results**\\n\\nAdvanced hunting queries executed for IOCs found in this incident.\\n@{variables('HuntResults')}"
+                        }
+                      }
+                    }
+                  }
+                },
+                "parameters": {
+                  "$connections": {
+                    "value": {
+                      "azuresentinel": {
+                        "connectionId": "[resourceId('Microsoft.Web/connections', format('azuresentinel-{0}', parameters('playbookName')))]",
+                        "connectionName": "[format('azuresentinel-{0}', parameters('playbookName'))]",
+                        "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuresentinel')]"
+                      },
+                      "wdatp": {
+                        "connectionId": "[resourceId('Microsoft.Web/connections', format('wdatp-{0}', parameters('playbookName')))]",
+                        "connectionName": "[format('wdatp-{0}', parameters('playbookName'))]",
+                        "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'wdatp')]"
+                      }
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', format('wdatp-{0}', parameters('playbookName')))]",
+                "[resourceId('Microsoft.Web/connections', format('azuresentinel-{0}', parameters('playbookName')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "playbookId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Logic/workflows', parameters('playbookName'))]"
+            },
+            "playbookName": {
+              "type": "string",
+              "value": "[parameters('playbookName')]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "condition": "[parameters('enableIpEnrichment')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "deploy-playbook-ipenrichment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "playbookName": {
+            "value": "PB-IP-Enrichment"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "workspaceId": {
+            "value": "[parameters('workspaceResourceId')]"
+          },
+          "enrichmentProvider": {
+            "value": "[parameters('enrichmentProvider')]"
+          },
+          "batchSize": {
+            "value": 100
+          },
+          "rateLimitPerMin": {
+            "value": 40
+          },
+          "reEnrichDays": {
+            "value": 7
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.33.93.31351",
+              "templateHash": "14485715539909029705"
+            }
+          },
+          "parameters": {
+            "playbookName": {
+              "type": "string",
+              "defaultValue": "PB-IP-Enrichment",
+              "metadata": {
+                "description": "Playbook name"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Location for resources"
+              }
+            },
+            "workspaceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Workspace ID"
+              }
+            },
+            "enrichmentProvider": {
+              "type": "string",
+              "defaultValue": "DefenderTI",
+              "allowedValues": [
+                "DefenderTI",
+                "ip-api",
+                "ipinfo",
+                "MaxMind"
+              ],
+              "metadata": {
+                "description": "Enrichment provider"
+              }
+            },
+            "providerApiBaseUrl": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Provider API base URL"
+              }
+            },
+            "providerApiKey": {
+              "type": "securestring",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Provider API key"
+              }
+            },
+            "batchSize": {
+              "type": "int",
+              "defaultValue": 100,
+              "metadata": {
+                "description": "Batch size per call"
+              }
+            },
+            "rateLimitPerMin": {
+              "type": "int",
+              "defaultValue": 40,
+              "metadata": {
+                "description": "Rate limit per minute"
+              }
+            },
+            "reEnrichDays": {
+              "type": "int",
+              "defaultValue": 7,
+              "metadata": {
+                "description": "Re-enrich after days"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[format('azureloganalytics-{0}', parameters('playbookName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "displayName": "Azure Log Analytics Connection",
+                "customParameterValues": {},
+                "api": {
+                  "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azureloganalyticsdatacollector')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Logic/workflows",
+              "apiVersion": "2019-05-01",
+              "name": "[parameters('playbookName')]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "$connections": {
+                      "defaultValue": {},
+                      "type": "Object"
+                    },
+                    "EnrichmentProvider": {
+                      "defaultValue": "[parameters('enrichmentProvider')]",
+                      "type": "String"
+                    },
+                    "ProviderApiBaseUrl": {
+                      "defaultValue": "[parameters('providerApiBaseUrl')]",
+                      "type": "String"
+                    },
+                    "ProviderApiKey": {
+                      "defaultValue": "[parameters('providerApiKey')]",
+                      "type": "SecureString"
+                    },
+                    "BatchSize": {
+                      "defaultValue": "[parameters('batchSize')]",
+                      "type": "Int"
+                    },
+                    "RateLimitPerMin": {
+                      "defaultValue": "[parameters('rateLimitPerMin')]",
+                      "type": "Int"
+                    },
+                    "ReEnrichDays": {
+                      "defaultValue": "[parameters('reEnrichDays')]",
+                      "type": "Int"
+                    },
+                    "WorkspaceId": {
+                      "defaultValue": "[parameters('workspaceId')]",
+                      "type": "String"
+                    }
+                  },
+                  "triggers": {
+                    "Recurrence": {
+                      "recurrence": {
+                        "frequency": "Hour",
+                        "interval": 6
+                      },
+                      "type": "Recurrence"
+                    }
+                  },
+                  "actions": {
+                    "Query_Unenriched_IPs": {
+                      "runAfter": {},
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azureloganalytics']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/queryData",
+                        "body": {
+                          "query": "let cutoff = ago(@{parameters('ReEnrichDays')}d);\\nCyren_Indicators_CL\\n| where isnotempty(ip_s)\\n| summarize by ip_s\\n| join kind=leftanti (\\n    IpEnrichment_CL\\n    | where lastEnriched_t >= cutoff\\n    | summarize by ip_s\\n  ) on ip_s\\n| take @{parameters('BatchSize')}",
+                          "subscriptions": [
+                            "[subscription().subscriptionId]"
+                          ],
+                          "workspaceId": "@parameters('WorkspaceId')",
+                          "timerange": {
+                            "type": "Custom",
+                            "relativeTimeInMinutes": 10080
+                          }
+                        }
+                      }
+                    },
+                    "Initialize_Enriched_Results": {
+                      "runAfter": {
+                        "Query_Unenriched_IPs": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "EnrichedResults",
+                            "type": "array",
+                            "value": []
+                          }
+                        ]
+                      }
+                    },
+                    "Switch_Provider": {
+                      "runAfter": {
+                        "Initialize_Enriched_Results": [
+                          "Succeeded"
+                        ]
+                      },
+                      "cases": {
+                        "DefenderTI": {
+                          "case": "DefenderTI",
+                          "actions": {
+                            "Enrich_with_DefenderTI": {
+                              "runAfter": {},
+                              "type": "Foreach",
+                              "foreach": "@body('Query_Unenriched_IPs')?['value']",
+                              "actions": {
+                                "Call_Defender_TI_API": {
+                                  "runAfter": {},
+                                  "type": "Http",
+                                  "inputs": {
+                                    "method": "GET",
+                                    "uri": "https://graph.microsoft.com/beta/security/threatIntelligence/ipAddresses/@{items('Enrich_with_DefenderTI')?['ip_s']}",
+                                    "authentication": {
+                                      "type": "ManagedServiceIdentity",
+                                      "audience": "https://graph.microsoft.com"
+                                    }
+                                  }
+                                },
+                                "Parse_DefenderTI_Response": {
+                                  "runAfter": {
+                                    "Call_Defender_TI_API": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "type": "ParseJson",
+                                  "inputs": {
+                                    "content": "@body('Call_Defender_TI_API')",
+                                    "schema": {
+                                      "type": "object",
+                                      "properties": {
+                                        "countryOrRegion": {
+                                          "type": "string"
+                                        },
+                                        "asn": {
+                                          "type": "integer"
+                                        },
+                                        "organization": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                "Append_DefenderTI_Result": {
+                                  "runAfter": {
+                                    "Parse_DefenderTI_Response": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "type": "AppendToArrayVariable",
+                                  "inputs": {
+                                    "name": "EnrichedResults",
+                                    "value": {
+                                      "ip_s": "@items('Enrich_with_DefenderTI')?['ip_s']",
+                                      "country_s": "@body('Parse_DefenderTI_Response')?['countryOrRegion']",
+                                      "asn_s": "@string(body('Parse_DefenderTI_Response')?['asn'])",
+                                      "org_s": "@body('Parse_DefenderTI_Response')?['organization']",
+                                      "source_s": "DefenderTI",
+                                      "lastEnriched_t": "@utcNow()"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "ip-api": {
+                          "case": "ip-api",
+                          "actions": {
+                            "Enrich_with_ipapi": {
+                              "runAfter": {},
+                              "type": "Http",
+                              "inputs": {
+                                "method": "POST",
+                                "uri": "http://ip-api.com/batch",
+                                "body": "@body('Query_Unenriched_IPs')?['value']",
+                                "headers": {
+                                  "Content-Type": "application/json"
+                                }
+                              }
+                            },
+                            "Parse_ipapi_Results": {
+                              "runAfter": {
+                                "Enrich_with_ipapi": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "Foreach",
+                              "foreach": "@body('Enrich_with_ipapi')",
+                              "actions": {
+                                "Append_ipapi_Result": {
+                                  "runAfter": {},
+                                  "type": "AppendToArrayVariable",
+                                  "inputs": {
+                                    "name": "EnrichedResults",
+                                    "value": {
+                                      "ip_s": "@items('Parse_ipapi_Results')?['query']",
+                                      "country_s": "@items('Parse_ipapi_Results')?['country']",
+                                      "asn_s": "@items('Parse_ipapi_Results')?['as']",
+                                      "org_s": "@items('Parse_ipapi_Results')?['org']",
+                                      "source_s": "ip-api",
+                                      "lastEnriched_t": "@utcNow()"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "ipinfo": {
+                          "case": "ipinfo",
+                          "actions": {
+                            "Enrich_with_ipinfo": {
+                              "runAfter": {},
+                              "type": "Foreach",
+                              "foreach": "@body('Query_Unenriched_IPs')?['value']",
+                              "actions": {
+                                "Call_ipinfo_API": {
+                                  "runAfter": {},
+                                  "type": "Http",
+                                  "inputs": {
+                                    "method": "GET",
+                                    "uri": "@{parameters('ProviderApiBaseUrl')}/@{items('Enrich_with_ipinfo')?['ip_s']}/json?token=@{parameters('ProviderApiKey')}"
+                                  }
+                                },
+                                "Append_ipinfo_Result": {
+                                  "runAfter": {
+                                    "Call_ipinfo_API": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "type": "AppendToArrayVariable",
+                                  "inputs": {
+                                    "name": "EnrichedResults",
+                                    "value": {
+                                      "ip_s": "@items('Enrich_with_ipinfo')?['ip_s']",
+                                      "country_s": "@body('Call_ipinfo_API')?['country']",
+                                      "asn_s": "@body('Call_ipinfo_API')?['asn']?['asn']",
+                                      "org_s": "@body('Call_ipinfo_API')?['org']",
+                                      "source_s": "ipinfo",
+                                      "lastEnriched_t": "@utcNow()"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "default": {
+                        "actions": {}
+                      },
+                      "expression": "@parameters('EnrichmentProvider')",
+                      "type": "Switch"
+                    },
+                    "Write_to_IpEnrichment_Table": {
+                      "runAfter": {
+                        "Switch_Provider": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azureloganalytics']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/api/logs",
+                        "body": "@{variables('EnrichedResults')}",
+                        "headers": {
+                          "Log-Type": "IpEnrichment"
+                        }
+                      }
+                    }
+                  }
+                },
+                "parameters": {
+                  "$connections": {
+                    "value": {
+                      "azureloganalytics": {
+                        "connectionId": "[resourceId('Microsoft.Web/connections', format('azureloganalytics-{0}', parameters('playbookName')))]",
+                        "connectionName": "[format('azureloganalytics-{0}', parameters('playbookName'))]",
+                        "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azureloganalyticsdatacollector')]"
+                      }
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', format('azureloganalytics-{0}', parameters('playbookName')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "playbookId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Logic/workflows', parameters('playbookName'))]"
+            },
+            "playbookName": {
+              "type": "string",
+              "value": "[parameters('playbookName')]"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "deploymentStatus": {
+      "type": "object",
+      "value": {
+        "dcrs": {
+          "cyren": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-dcr-cyren'), '2022-09-01').outputs.dcrImmutableId.value]",
+          "tacitred": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-dcr-tacitred'), '2022-09-01').outputs.dcrImmutableId.value]"
+        },
+        "connectors": {
+          "cyren": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('workspaceSubscriptionId'), variables('workspaceResourceGroup')), 'Microsoft.Resources/deployments', 'deploy-connector-cyren'), '2022-09-01').outputs.connectorName.value]",
+          "tacitred": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('workspaceSubscriptionId'), variables('workspaceResourceGroup')), 'Microsoft.Resources/deployments', 'deploy-connector-tacitred'), '2022-09-01').outputs.connectorName.value]"
+        },
+        "analytics": "[if(parameters('enableAnalytics'), createObject('rulesDeployed', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('workspaceSubscriptionId'), variables('workspaceResourceGroup')), 'Microsoft.Resources/deployments', 'deploy-analytics-rules'), '2022-09-01').outputs.analyticsRulesDeployed.value), createObject())]",
+        "playbooks": {
+          "threatHunt": "[if(parameters('enablePlaybooks'), reference(resourceId('Microsoft.Resources/deployments', 'deploy-playbook-threathunt'), '2022-09-01').outputs.playbookName.value, 'Not deployed')]",
+          "ipEnrichment": "[if(parameters('enableIpEnrichment'), reference(resourceId('Microsoft.Resources/deployments', 'deploy-playbook-ipenrichment'), '2022-09-01').outputs.playbookName.value, 'Not deployed')]"
+        }
+      }
+    },
+    "workspaceId": {
+      "type": "string",
+      "value": "[parameters('workspaceResourceId')]"
+    },
+    "deploymentTimestamp": {
+      "type": "string",
+      "value": "[parameters('deploymentTimestamp')]"
+    }
+  }
+}

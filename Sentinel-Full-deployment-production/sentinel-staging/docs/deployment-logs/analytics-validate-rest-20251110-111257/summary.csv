@@ -1,0 +1,8 @@
+"Rule","Status","Rows"
+"rule-active-compromised-account-NO-PARSERS.kql","Failed","-1"
+"rule-cross-feed-correlation-NO-PARSERS.kql","Failed","-1"
+"rule-department-compromise-cluster-NO-PARSERS.kql","Failed","-1"
+"rule-high-risk-user-compromised-NO-PARSERS.kql","Parsed","0"
+"rule-malware-infrastructure-correlation-NO-PARSERS.kql","Failed","-1"
+"rule-malware-infrastructure-NO-PARSERS.kql","Failed","-1"
+"rule-repeat-compromise-NO-PARSERS.kql","Parsed","144"
