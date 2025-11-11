@@ -1,0 +1,7 @@
+{
+  "DCR": false,
+  "DCE": false,
+  "Principal": "fb93d686-375c-429e-b50a-22e239fb37fe",
+  "DCRScope": "D:\\REPO\\Upwork-Clean\\Sentinel-Full-deployment-production\\sentinel-staging>  \"C:\\Program Files\\Microsoft SDKs\\Azure\\CLI2\\wbin\\\\..\\python.exe\" -IBm azure.cli resource list -g SentinelTestStixImport --resource-type Microsoft.Insights/dataCollectionRules --query [?contains(name,'tacitred')].id -o tsv",
+  "DCEScope": "/subscriptions/774bee0e-b281-4f70-8e40-199e35b65117/resourceGroups/SentinelTestStixImport/providers/Microsoft.Insights/dataCollectionEndpoints/dce-sentinel-ti"
+}

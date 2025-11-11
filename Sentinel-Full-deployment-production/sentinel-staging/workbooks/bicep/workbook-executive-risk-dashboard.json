@@ -1,0 +1,76 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.38.33.27573",
+      "templateHash": "11851914815843587261"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources"
+      }
+    },
+    "workspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics workspace ID"
+      }
+    },
+    "workbookDisplayName": {
+      "type": "string",
+      "defaultValue": "Executive Risk Dashboard",
+      "metadata": {
+        "description": "Workbook display name"
+      }
+    },
+    "workbookId": {
+      "type": "string",
+      "defaultValue": "[guid(resourceGroup().id, 'executive-dashboard')]",
+      "metadata": {
+        "description": "Workbook unique identifier"
+      }
+    }
+  },
+  "variables": {
+    "$fxv#0": "{\r\n  \"version\": \"Notebook/1.0\",\r\n  \"items\": [\r\n    {\r\n      \"type\": 1,\r\n      \"content\": {\r\n        \"json\": \"# 📊 Executive Risk Dashboard\\n\\n## Business Impact & Risk Visibility\\n\\n**Key Metrics:**\\n- Overall Risk Level\\n- Total Threats Detected\\n- Active Threats (Last 48h)\\n- 7-Day and 30-Day Trends\\n\\n**Data Sources:** Cyren Malware URLs + TacitRed Findings\"\r\n      },\r\n      \"name\": \"header-text\"\r\n    },\r\n    {\r\n      \"type\": 9,\r\n      \"content\": {\r\n        \"version\": \"KqlParameterItem/1.0\",\r\n        \"parameters\": [\r\n          {\r\n            \"id\": \"time-param\",\r\n            \"version\": \"KqlParameterItem/1.0\",\r\n            \"name\": \"TimeRange\",\r\n            \"type\": 4,\r\n            \"isRequired\": true,\r\n            \"value\": {\r\n              \"durationMs\": 604800000\r\n            },\r\n            \"typeSettings\": {\r\n              \"selectableValues\": [\r\n                {\r\n                  \"durationMs\": 86400000\r\n                },\r\n                {\r\n                  \"durationMs\": 604800000\r\n                },\r\n                {\r\n                  \"durationMs\": 2592000000\r\n                }\r\n              ],\r\n              \"allowCustom\": true\r\n            },\r\n            \"label\": \"Time Range\"\r\n          }\r\n        ],\r\n        \"style\": \"pills\",\r\n        \"queryType\": 0,\r\n        \"resourceType\": \"microsoft.operationalinsights/workspaces\"\r\n      },\r\n      \"name\": \"parameters-1\"\r\n    },\r\n    {\r\n      \"type\": 3,\r\n      \"content\": {\r\n        \"version\": \"KqlItem/1.0\",\r\n        \"query\": \"// OVERALL RISK METRICS\\nlet CyrenData = Cyren_Indicators_CL\\n| where TimeGenerated {TimeRange}\\n| extend \\n    Risk = toint(iif(isnull(risk_d), 50, risk_d)),\\n    LastSeen = iif(isnull(lastSeen_t), TimeGenerated, lastSeen_t)\\n| extend \\n    IsActive = datetime_diff('hour', now(), LastSeen) <= 48\\n| summarize \\n    TotalThreats = count(),\\n    ActiveThreats = countif(IsActive),\\n    AvgRisk = avg(Risk)\\n| extend Source = \\\"Cyren\\\";\\nlet TacitRedData = TacitRed_Findings_CL\\n| where TimeGenerated {TimeRange}\\n| extend \\n    Confidence = todouble(iif(isnull(confidence_d), 50, confidence_d)),\\n    LastSeen = iif(isnull(lastSeen_t), TimeGenerated, lastSeen_t)\\n| extend \\n    IsActive = datetime_diff('hour', now(), LastSeen) <= 48\\n| summarize \\n    TotalThreats = count(),\\n    ActiveThreats = countif(IsActive),\\n    AvgRisk = avg(Confidence)\\n| extend Source = \\\"TacitRed\\\";\\nunion CyrenData, TacitRedData\\n| summarize \\n    TotalThreats = sum(TotalThreats),\\n    TotalActive = sum(ActiveThreats),\\n    WeightedAvgRisk = avg(AvgRisk)\\n| extend \\n    OverallRiskLevel = case(\\n        TotalActive >= 50, \\\"🔴 Critical\\\",\\n        TotalActive >= 25, \\\"🟠 High\\\",\\n        TotalActive >= 10, \\\"🟡 Elevated\\\",\\n        \\\"🟢 Normal\\\"\\n    )\\n| project \\n    OverallRiskLevel,\\n    TotalThreats,\\n    ActiveThreats = TotalActive,\\n    WeightedAvgRisk = round(WeightedAvgRisk, 2)\",\r\n        \"size\": 0,\r\n        \"title\": \"📊 Overall Risk Assessment\",\r\n        \"timeContext\": {\r\n          \"durationMs\": 0\r\n        },\r\n        \"timeContextFromParameter\": \"TimeRange\",\r\n        \"queryType\": 0,\r\n        \"resourceType\": \"microsoft.operationalinsights/workspaces\",\r\n        \"visualization\": \"table\"\r\n      },\r\n      \"name\": \"query-overall-risk\"\r\n    },\r\n    {\r\n      \"type\": 3,\r\n      \"content\": {\r\n        \"version\": \"KqlItem/1.0\",\r\n        \"query\": \"// 30-DAY THREAT TREND\\nunion withsource=TableName Cyren_Indicators_CL, TacitRed_Findings_CL\\n| where TimeGenerated >= ago(30d)\\n| extend Source = case(\\n    TableName == \\\"Cyren_Indicators_CL\\\", \\\"Cyren\\\",\\n    \\\"TacitRed\\\"\\n)\\n| summarize Count = count() by bin(TimeGenerated, 1d), Source\\n| order by TimeGenerated asc\",\r\n        \"size\": 0,\r\n        \"title\": \"📈 30-Day Threat Trend\",\r\n        \"timeContext\": {\r\n          \"durationMs\": 2592000000\r\n        },\r\n        \"queryType\": 0,\r\n        \"resourceType\": \"microsoft.operationalinsights/workspaces\",\r\n        \"visualization\": \"areachart\"\r\n      },\r\n      \"name\": \"query-trend\"\r\n    },\r\n    {\r\n      \"type\": 3,\r\n      \"content\": {\r\n        \"version\": \"KqlItem/1.0\",\r\n        \"query\": \"// SLA PERFORMANCE METRICS\\nlet SLATarget = 4.0;\\nCyren_Indicators_CL\\n| where TimeGenerated >= ago(7d)\\n| extend \\n    DetectionTime = TimeGenerated,\\n    ReportedTime = iif(isnull(lastSeen_t), TimeGenerated, lastSeen_t)\\n| extend ResponseTimeHours = datetime_diff('hour', ReportedTime, DetectionTime)\\n| summarize \\n    AvgResponseTime = avg(ResponseTimeHours),\\n    MaxResponseTime = max(ResponseTimeHours),\\n    SLACompliance = round(100.0 * countif(ResponseTimeHours <= SLATarget) / count(), 2)\\n| extend \\n    SLAStatus = case(\\n        SLACompliance >= 95, \\\"✅ Excellent\\\",\\n        SLACompliance >= 85, \\\"✔️ Good\\\",\\n        SLACompliance >= 75, \\\"⚠️ Needs Improvement\\\",\\n        \\\"❌ Critical\\\"\\n    )\\n| project \\n    SLAStatus,\\n    SLACompliance,\\n    AvgResponseTime = round(AvgResponseTime, 2),\\n    MaxResponseTime = round(MaxResponseTime, 2)\",\r\n        \"size\": 0,\r\n        \"title\": \"🎯 SLA Performance Metrics\",\r\n        \"timeContext\": {\r\n          \"durationMs\": 604800000\r\n        },\r\n        \"queryType\": 0,\r\n        \"resourceType\": \"microsoft.operationalinsights/workspaces\",\r\n        \"visualization\": \"table\"\r\n      },\r\n      \"name\": \"query-sla\"\r\n    }\r\n  ],\r\n  \"styleSettings\": {},\r\n  \"$schema\": \"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"\r\n}\r\n"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/workbooks",
+      "apiVersion": "2022-04-01",
+      "name": "[parameters('workbookId')]",
+      "location": "[parameters('location')]",
+      "kind": "shared",
+      "properties": {
+        "displayName": "[parameters('workbookDisplayName')]",
+        "serializedData": "[string(variables('$fxv#0'))]",
+        "version": "1.0",
+        "sourceId": "[parameters('workspaceId')]",
+        "category": "sentinel",
+        "tags": [
+          "Executive",
+          "Risk Management",
+          "Business Impact",
+          "SLA Metrics",
+          "Financial Risk"
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "workbookId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/workbooks', parameters('workbookId'))]"
+    },
+    "workbookName": {
+      "type": "string",
+      "value": "[parameters('workbookId')]"
+    }
+  }
+}

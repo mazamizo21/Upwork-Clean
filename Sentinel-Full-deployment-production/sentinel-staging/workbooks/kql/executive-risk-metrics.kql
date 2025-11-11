@@ -7,13 +7,15 @@ let costPerIncident = 50000.0;  // Average cost per security incident
 let costPerCompromisedAccount = 5000.0;  // Average cost per compromised account
 
 // === CALCULATE RISK EXPOSURE ===
-let CyrenRisk = Cyren_MalwareUrls_CL
+let CyrenRisk = Cyren_Indicators_CL
 | where TimeGenerated {TimeRange}
-| extend payload = parse_json(payload_s)
 | extend 
-    Risk = toint(coalesce(payload.risk, 50)),
-    LastSeen = todatetime(payload.last_seen),
-    Category = tostring(parse_json(tostring(payload.detection.category))[0])
+    Risk = toint(coalesce(risk_d, 50)),
+    LastSeen = todatetime(coalesce(lastSeen_t, TimeGenerated)),
+    Category = tostring(category_s),
+    URL = tostring(url_s),
+    Domain = tostring(domain_s),
+    IP = tostring(ip_s)
 | extend 
     IsActive = datetime_diff('hour', now(), LastSeen) <= 48,
     IsCritical = Risk >= 80,
@@ -24,15 +26,20 @@ let CyrenRisk = Cyren_MalwareUrls_CL
     CriticalThreats = countif(IsCritical),
     HighThreats = countif(IsHigh),
     AvgRisk = avg(Risk),
-    Categories = dcount(Category)
+    Categories = dcount(Category),
+    UniqueDomains = dcount(Domain),
+    UniqueIPs = dcount(IP)
 | extend Source = "Cyren - Malware Infrastructure";
 
 let TacitRedRisk = TacitRed_Findings_CL
 | where TimeGenerated {TimeRange}
 | extend 
-    Confidence = todouble(confidence_d),
-    LastSeen = todatetime(lastSeen_t),
-    Domain = tostring(domain_s)
+    Confidence = todouble(coalesce(confidence_d, 50)),
+    LastSeen = todatetime(coalesce(lastSeen_t, TimeGenerated)),
+    Domain = tostring(domain_s),
+    Email = tostring(email_s),
+    FindingType = tostring(findingType_s),
+    Severity = tostring(severity_s)
 | extend 
     IsActive = datetime_diff('hour', now(), LastSeen) <= 48,
     IsCritical = Confidence >= 90,
@@ -43,7 +50,9 @@ let TacitRedRisk = TacitRed_Findings_CL
     CriticalThreats = countif(IsCritical),
     HighThreats = countif(IsHigh),
     AvgRisk = avg(Confidence),
-    AffectedDomains = dcount(Domain)
+    AffectedDomains = dcount(Domain),
+    AffectedUsers = dcount(Email),
+    FindingTypes = dcount(FindingType)
 | extend Source = "TacitRed - Credential Compromise";
 
 // === UNIFIED RISK METRICS ===
@@ -124,12 +133,13 @@ let SLAMetrics = SecurityIncident
     );
 
 // === TREND ANALYSIS ===
-let TrendAnalysis = union Cyren_MalwareUrls_CL, TacitRed_Findings_CL
+let TrendAnalysis = union withsource=TableName Cyren_Indicators_CL, TacitRed_Findings_CL
 | where TimeGenerated >= ago(30d)  // 30-day trend window
-| summarize Count = count() by bin(TimeGenerated, 1d), Source = case(
-    $table == "Cyren_MalwareUrls_CL", "Cyren",
+| extend Source = case(
+    TableName == "Cyren_Indicators_CL", "Cyren",
     "TacitRed"
 )
+| summarize Count = count() by bin(TimeGenerated, 1d), Source
 | order by Source, TimeGenerated asc
 | partition by Source (
     extend 
@@ -152,5 +162,5 @@ let TrendAnalysis = union Cyren_MalwareUrls_CL, TacitRed_Findings_CL
 // Return executive summary
 print 
     Report = "Executive Risk & Business Impact Dashboard",
-    TimeRange = strcat(format_datetime(huntingWindow, 'yyyy-MM-dd HH:mm'), " to ", format_datetime(now(), 'yyyy-MM-dd HH:mm')),
+    TimeRange = strcat(format_datetime(riskWindow, 'yyyy-MM-dd HH:mm'), " to ", format_datetime(now(), 'yyyy-MM-dd HH:mm')),
     GeneratedAt = now()

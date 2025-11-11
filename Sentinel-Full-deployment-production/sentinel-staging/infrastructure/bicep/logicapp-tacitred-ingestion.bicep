@@ -43,7 +43,7 @@ param tags object = {
 }
 
 // Logic App with managed identity
-resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
+resource logicApp 'Microsoft.Logic/workflows@2018-07-01-preview' = {
   name: logicAppName
   location: location
   tags: tags

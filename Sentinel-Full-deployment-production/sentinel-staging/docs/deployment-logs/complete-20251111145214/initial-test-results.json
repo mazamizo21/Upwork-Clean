@@ -1,0 +1,17 @@
+[
+  {
+    "LogicApp": "logic-cyren-ip-reputation",
+    "Status": "Succeeded",
+    "Error": "None"
+  },
+  {
+    "LogicApp": "logic-cyren-malware-urls",
+    "Status": "Succeeded",
+    "Error": "None"
+  },
+  {
+    "LogicApp": "logic-tacitred-ingestion",
+    "Status": "Failed",
+    "Error": "None"
+  }
+]

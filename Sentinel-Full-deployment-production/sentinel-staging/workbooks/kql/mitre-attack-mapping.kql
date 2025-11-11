@@ -32,14 +32,13 @@ let CredentialAccessTechniques = TacitRed_Findings_CL
     by MitreTactic, MitreTechnique, ThreatSource;
 
 // === INITIAL ACCESS TECHNIQUES (Tactic: TA0001) ===
-let InitialAccessTechniques = Cyren_MalwareUrls_CL
+let InitialAccessTechniques = Cyren_Indicators_CL
 | where TimeGenerated {TimeRange}
-| extend payload = parse_json(payload_s)
 | extend 
-    Category = tostring(parse_json(tostring(payload.detection.category))[0]),
-    Type = tostring(payload.type),
-    Risk = toint(coalesce(payload.risk, 50)),
-    Domain = tostring(coalesce(payload.domain, extract(@"://([^/]+)", 1, tostring(payload.url))))
+    Category = tostring(category_s),
+    Type = tostring(type_s),
+    Risk = toint(coalesce(risk_d, 50)),
+    Domain = tostring(coalesce(domain_s, extract(@"://([^/]+)", 1, tostring(url_s))))
 | extend 
     // Map categories to MITRE techniques
     MitreTechnique = case(
@@ -60,15 +59,14 @@ let InitialAccessTechniques = Cyren_MalwareUrls_CL
     by MitreTactic, MitreTechnique, ThreatSource;
 
 // === COMMAND AND CONTROL TECHNIQUES (Tactic: TA0011) ===
-let C2Techniques = Cyren_MalwareUrls_CL
+let C2Techniques = Cyren_Indicators_CL
 | where TimeGenerated {TimeRange}
-| extend payload = parse_json(payload_s)
 | extend 
-    Category = tostring(parse_json(tostring(payload.detection.category))[0]),
-    Protocol = tostring(payload.meta.protocol),
-    Port = toint(payload.meta.port),
-    Risk = toint(coalesce(payload.risk, 50)),
-    Domain = tostring(coalesce(payload.domain, extract(@"://([^/]+)", 1, tostring(payload.url))))
+    Category = tostring(category_s),
+    Protocol = tostring(protocol_s),
+    Port = toint(port_d),
+    Risk = toint(coalesce(risk_d, 50)),
+    Domain = tostring(coalesce(domain_s, extract(@"://([^/]+)", 1, tostring(url_s))))
 | where Category contains "c2" or Category contains "command" or Category contains "control" or 
         Category contains "botnet" or Protocol in ("http", "https", "dns")
 | extend 
@@ -89,15 +87,12 @@ let C2Techniques = Cyren_MalwareUrls_CL
     by MitreTactic, MitreTechnique, ThreatSource;
 
 // === PERSISTENCE TECHNIQUES (Tactic: TA0003) ===
-let PersistenceTechniques = union Cyren_MalwareUrls_CL, TacitRed_Findings_CL
+let PersistenceTechniques = union Cyren_Indicators_CL, TacitRed_Findings_CL
 | where TimeGenerated >= ago(30d)  // Look for persistent activity
 | extend 
     Indicator = case(
-        $table == "Cyren_MalwareUrls_CL", 
-            tostring(coalesce(
-                parse_json(payload_s).domain,
-                extract(@"://([^/]+)", 1, tostring(parse_json(payload_s).url))
-            )),
+        $table == "Cyren_Indicators_CL", 
+            tostring(coalesce(domain_s, extract(@"://([^/]+)", 1, tostring(url_s)))),
         tostring(domain_s)
     ),
     DetectionTime = TimeGenerated
@@ -115,11 +110,11 @@ let PersistenceTechniques = union Cyren_MalwareUrls_CL, TacitRed_Findings_CL
 | extend 
     MitreTactic = "TA0003 - Persistence",
     MitreTechnique = case(
-        Source == "Cyren_MalwareUrls_CL", "T1584 - Compromise Infrastructure",
+        Source == "Cyren_Indicators_CL", "T1584 - Compromise Infrastructure",
         "T1078 - Valid Accounts"
     ),
     ThreatSource = case(
-        Source == "Cyren_MalwareUrls_CL", "Cyren",
+        Source == "Cyren_Indicators_CL", "Cyren",
         "TacitRed"
     )
 | where TimeGenerated {TimeRange}

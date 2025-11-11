@@ -5,18 +5,19 @@
 let ScoringWindow = {TimeRange:start} .. {TimeRange:end};
 
 // === CYREN MALWARE INFRASTRUCTURE SCORING ===
-let CyrenThreats = Cyren_MalwareUrls_CL
+let CyrenThreats = Cyren_Indicators_CL
 | where TimeGenerated {TimeRange}
-| extend payload = parse_json(payload_s)
 | extend 
-    LastSeen = todatetime(payload.last_seen),
-    FirstSeen = todatetime(payload.first_seen),
-    Category = tostring(parse_json(tostring(payload.detection.category))[0]),
-    Type = tostring(payload.type),
-    Identifier = tostring(payload.identifier),
-    Domain = tostring(payload.domain),
-    Risk = toint(coalesce(payload.risk, 50)),
-    Relationships = parse_json(tostring(payload.relationships))
+    LastSeen = todatetime(coalesce(lastSeen_t, TimeGenerated)),
+    FirstSeen = todatetime(coalesce(firstSeen_t, TimeGenerated)),
+    Category = tostring(category_s),
+    Type = tostring(type_s),
+    Identifier = tostring(identifier_s),
+    Domain = tostring(domain_s),
+    URL = tostring(url_s),
+    IP = tostring(ip_s),
+    Risk = toint(coalesce(risk_d, 50)),
+    Relationships = tostring(relationships_s)
 | extend 
     // === TEMPORAL SCORING ===
     HoursSinceLastSeen = datetime_diff('hour', now(), LastSeen),
@@ -37,7 +38,7 @@ let CyrenThreats = Cyren_MalwareUrls_CL
         40.0                                // New threat
     ),
     // === RELATIONSHIP SCORING ===
-    RelationshipCount = array_length(Relationships),
+    RelationshipCount = iff(isnotempty(Relationships), array_length(split(Relationships, ",")), 0),
     RelationshipScore = case(
         RelationshipCount >= 10, 100.0,    // Highly connected infrastructure
         RelationshipCount >= 5, 80.0,      // Well connected
@@ -68,8 +69,8 @@ let TacitRedThreats = TacitRed_Findings_CL
     Email = tostring(email_s),
     Domain = tostring(domain_s),
     Confidence = todouble(confidence_d),
-    LastSeen = todatetime(lastSeen_t),
-    FirstSeen = todatetime(firstSeen_t),
+    LastSeen = todatetime(coalesce(lastSeen_t, TimeGenerated)),
+    FirstSeen = todatetime(coalesce(firstSeen_t, TimeGenerated)),
     FindingType = tostring(findingType_s),
     Status = tostring(status_s)
 | extend 

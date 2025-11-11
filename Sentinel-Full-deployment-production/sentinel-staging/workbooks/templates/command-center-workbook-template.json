@@ -49,7 +49,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "// REAL-TIME THREAT SCORE TIMELINE\nunion withsource=TableName Cyren_MalwareUrls_CL, TacitRed_Findings_CL\n| where TimeGenerated {TimeRange}\n| extend payload = parse_json(payload_s)\n| extend \n    ThreatScore = toint(coalesce(payload.risk, payload.score, payload.confidence, 50)),\n    Source = case(TableName == \"Cyren_MalwareUrls_CL\", \"Cyren\", \"TacitRed\")\n| summarize AvgThreatScore = avg(ThreatScore), Count = count() by bin(TimeGenerated, 1h), Source\n| order by TimeGenerated asc",
+        "query": "// REAL-TIME THREAT SCORE TIMELINE\nunion withsource=TableName Cyren_Indicators_CL, TacitRed_Findings_CL\n| where TimeGenerated {TimeRange}\n| extend \n    ThreatScore = toint(iif(TableName == \"Cyren_Indicators_CL\", iif(isnull(risk_d), 50, risk_d), iif(isnull(confidence_d), 50, confidence_d))),\n    Source = case(TableName == \"Cyren_Indicators_CL\", \"Cyren\", \"TacitRed\")\n| summarize AvgThreatScore = avg(ThreatScore), Count = count() by bin(TimeGenerated, 1h), Source\n| order by TimeGenerated asc",
         "size": 0,
         "title": "🔥 Real-Time Threat Score Timeline",
         "timeContext": {
@@ -66,7 +66,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "// THREAT VELOCITY & ACCELERATION\nlet baseline = union Cyren_MalwareUrls_CL, TacitRed_Findings_CL\n| where TimeGenerated between(ago(48h)..ago(24h))\n| summarize BaselineCount = count();\nlet current = union Cyren_MalwareUrls_CL, TacitRed_Findings_CL\n| where TimeGenerated >= ago(24h)\n| summarize CurrentCount = count();\nbaseline\n| extend CurrentCount = toscalar(current)\n| extend \n    Velocity = CurrentCount - BaselineCount,\n    PercentChange = round(100.0 * (CurrentCount - BaselineCount) / BaselineCount, 2),\n    Trend = case(\n        CurrentCount > BaselineCount * 1.2, \"📈 Accelerating\",\n        CurrentCount < BaselineCount * 0.8, \"📉 Decelerating\",\n        \"➡️ Stable\"\n    )\n| project Trend, Velocity, PercentChange, BaselineCount, CurrentCount",
+        "query": "// THREAT VELOCITY & ACCELERATION\nlet baseline = union Cyren_Indicators_CL, TacitRed_Findings_CL\n| where TimeGenerated between(ago(48h)..ago(24h))\n| summarize BaselineCount = count();\nlet current = union Cyren_Indicators_CL, TacitRed_Findings_CL\n| where TimeGenerated >= ago(24h)\n| summarize CurrentCount = count();\nbaseline\n| extend CurrentCount = toscalar(current)\n| extend \n    Velocity = CurrentCount - BaselineCount,\n    PercentChange = round(100.0 * (CurrentCount - BaselineCount) / BaselineCount, 2),\n    Trend = case(\n        CurrentCount > BaselineCount * 1.2, \"📈 Accelerating\",\n        CurrentCount < BaselineCount * 0.8, \"📉 Decelerating\",\n        \"➡️ Stable\"\n    )\n| project Trend, Velocity, PercentChange, BaselineCount, CurrentCount",
         "size": 0,
         "title": "⚡ Threat Velocity & Acceleration",
         "timeContext": {
@@ -82,7 +82,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "// STATISTICAL ANOMALY DETECTION\nunion Cyren_MalwareUrls_CL, TacitRed_Findings_CL\n| where TimeGenerated >= ago(7d)\n| summarize HourlyCount = count() by bin(TimeGenerated, 1h)\n| summarize \n    AvgCount = avg(HourlyCount),\n    StdDev = stdev(HourlyCount),\n    MaxCount = max(HourlyCount),\n    MinCount = min(HourlyCount)\n| extend \n    UpperThreshold = AvgCount + (2 * StdDev),\n    LowerThreshold = AvgCount - (2 * StdDev),\n    AnomalyStatus = case(\n        MaxCount > AvgCount + (2 * StdDev), \"⚠️ Anomaly Detected\",\n        \"✅ Normal\"\n    )\n| project \n    AnomalyStatus,\n    AvgCount = round(AvgCount, 2),\n    StdDev = round(StdDev, 2),\n    UpperThreshold = round(UpperThreshold, 2),\n    MaxCount",
+        "query": "// STATISTICAL ANOMALY DETECTION\nunion Cyren_Indicators_CL, TacitRed_Findings_CL\n| where TimeGenerated >= ago(7d)\n| summarize HourlyCount = count() by bin(TimeGenerated, 1h)\n| summarize \n    AvgCount = avg(HourlyCount),\n    StdDev = stdev(HourlyCount),\n    MaxCount = max(HourlyCount),\n    MinCount = min(HourlyCount)\n| extend \n    UpperThreshold = AvgCount + (2 * StdDev),\n    LowerThreshold = AvgCount - (2 * StdDev),\n    AnomalyStatus = case(\n        MaxCount > AvgCount + (2 * StdDev), \"⚠️ Anomaly Detected\",\n        \"✅ Normal\"\n    )\n| project \n    AnomalyStatus,\n    AvgCount = round(AvgCount, 2),\n    StdDev = round(StdDev, 2),\n    UpperThreshold = round(UpperThreshold, 2),\n    MaxCount",
         "size": 0,
         "title": "🚨 Statistical Anomaly Detection",
         "timeContext": {

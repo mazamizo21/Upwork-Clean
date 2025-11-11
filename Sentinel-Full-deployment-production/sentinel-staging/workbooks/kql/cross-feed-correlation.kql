@@ -5,19 +5,15 @@
 let correlationWindow = {TimeRange:start} .. {TimeRange:end};
 
 // === EXTRACT DOMAINS FROM CYREN ===
-let CyrenDomains = Cyren_MalwareUrls_CL
+let CyrenDomains = Cyren_Indicators_CL
 | where TimeGenerated {TimeRange}
-| extend payload = parse_json(payload_s)
 | extend 
-    Domain = tolower(tostring(coalesce(
-        payload.domain,
-        extract(@"://([^/]+)", 1, tostring(payload.url))
-    ))),
-    URL = tostring(payload.url),
-    Category = tostring(parse_json(tostring(payload.detection.category))[0]),
-    Risk = toint(coalesce(payload.risk, 50)),
-    LastSeen = todatetime(payload.last_seen),
-    FirstSeen = todatetime(payload.first_seen)
+    Domain = tolower(tostring(coalesce(domain_s, extract(@"://([^/]+)", 1, tostring(url_s))))),
+    URL = tostring(url_s),
+    Category = tostring(category_s),
+    Risk = toint(coalesce(risk_d, 50)),
+    LastSeen = todatetime(coalesce(lastSeen_t, TimeGenerated)),
+    FirstSeen = todatetime(coalesce(firstSeen_t, TimeGenerated))
 | where isnotempty(Domain)
 | summarize 
     CyrenDetections = count(),
@@ -36,8 +32,8 @@ let TacitRedDomains = TacitRed_Findings_CL
     Domain = tolower(tostring(domain_s)),
     FindingType = tostring(findingType_s),
     Confidence = todouble(confidence_d),
-    LastSeen = todatetime(lastSeen_t),
-    FirstSeen = todatetime(firstSeen_t)
+    LastSeen = todatetime(coalesce(lastSeen_t, TimeGenerated)),
+    FirstSeen = todatetime(coalesce(firstSeen_t, TimeGenerated))
 | where isnotempty(Domain)
 | summarize 
     TacitRedDetections = count(),

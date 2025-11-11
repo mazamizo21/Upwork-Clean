@@ -11,8 +11,8 @@ let RapidCredentialReuse = TacitRed_Findings_CL
 | extend 
     Email = tostring(email_s),
     Domain = tostring(domain_s),
-    FirstSeen = todatetime(firstSeen_t),
-    LastSeen = todatetime(lastSeen_t),
+    FirstSeen = todatetime(coalesce(firstSeen_t, TimeGenerated)),
+    LastSeen = todatetime(coalesce(lastSeen_t, TimeGenerated)),
     Confidence = todouble(confidence_d)
 | summarize 
     FindingCount = count(),
@@ -41,18 +41,15 @@ let RapidCredentialReuse = TacitRed_Findings_CL
 
 // === BEHAVIORAL ANOMALY: PERSISTENT MALWARE INFRASTRUCTURE ===
 // Detects infrastructure that keeps reappearing despite takedowns
-let PersistentInfrastructure = Cyren_MalwareUrls_CL
+let PersistentInfrastructure = Cyren_Indicators_CL
 | where TimeGenerated >= ago(30d)  // Look back 30 days for persistence
-| extend payload = parse_json(payload_s)
 | extend 
-    Domain = tostring(coalesce(
-        payload.domain,
-        extract(@"://([^/]+)", 1, tostring(payload.url))
-    )),
-    FirstSeen = todatetime(payload.first_seen),
-    LastSeen = todatetime(payload.last_seen),
-    Category = tostring(parse_json(tostring(payload.detection.category))[0]),
-    Risk = toint(coalesce(payload.risk, 50))
+    Domain = tostring(domain_s),
+    URL = tostring(url_s),
+    FirstSeen = todatetime(coalesce(firstSeen_t, TimeGenerated)),
+    LastSeen = todatetime(coalesce(lastSeen_t, TimeGenerated)),
+    Category = tostring(category_s),
+    Risk = toint(coalesce(risk_d, 50))
 | where isnotempty(Domain)
 | summarize 
     DetectionCount = count(),
@@ -88,20 +85,16 @@ let CredentialCompromise = TacitRed_Findings_CL
 | extend 
     Email = tostring(email_s),
     Domain = tostring(domain_s),
-    CompromiseTime = todatetime(lastSeen_t)
+    CompromiseTime = todatetime(coalesce(lastSeen_t, TimeGenerated))
 | project Email, Domain, CompromiseTime;
 
-let MalwareAccess = Cyren_MalwareUrls_CL
+let MalwareAccess = Cyren_Indicators_CL
 | where TimeGenerated {TimeRange}
-| extend payload = parse_json(payload_s)
 | extend 
-    TargetDomain = tostring(coalesce(
-        payload.domain,
-        extract(@"://([^/]+)", 1, tostring(payload.url))
-    )),
-    AccessTime = todatetime(payload.last_seen),
-    Category = tostring(parse_json(tostring(payload.detection.category))[0]),
-    Risk = toint(coalesce(payload.risk, 50))
+    TargetDomain = tostring(domain_s),
+    AccessTime = todatetime(coalesce(lastSeen_t, TimeGenerated)),
+    Category = tostring(category_s),
+    Risk = toint(coalesce(risk_d, 50))
 | project TargetDomain, AccessTime, Category, Risk;
 
 let AttackChain = CredentialCompromise
@@ -129,18 +122,13 @@ let AttackChain = CredentialCompromise
 
 // === IOC ENRICHMENT: INDICATORS WITH MULTIPLE CONTEXTS ===
 // Finds indicators that appear across multiple threat contexts
-let EnrichedIOCs = Cyren_MalwareUrls_CL
+let EnrichedIOCs = Cyren_Indicators_CL
 | where TimeGenerated {TimeRange}
-| extend payload = parse_json(payload_s)
 | extend 
-    Indicator = tolower(tostring(coalesce(
-        payload.domain,
-        payload.ip,
-        extract(@"://([^/]+)", 1, tostring(payload.url))
-    ))),
-    Context = strcat("Cyren-", tostring(parse_json(tostring(payload.detection.category))[0])),
-    Risk = toint(coalesce(payload.risk, 50)),
-    DetectionTime = todatetime(payload.last_seen)
+    Indicator = tolower(tostring(coalesce(domain_s, ip_s, extract(@"://([^/]+)", 1, tostring(url_s))))),
+    Context = strcat("Cyren-", tostring(category_s)),
+    Risk = toint(coalesce(risk_d, 50)),
+    DetectionTime = todatetime(coalesce(lastSeen_t, TimeGenerated))
 | where isnotempty(Indicator)
 | summarize 
     ContextCount = dcount(Context),
